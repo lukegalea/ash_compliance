@@ -70,9 +70,8 @@ defmodule AshCompliance.MixProject do
 
   defp deps do
     [
-      # The rule engine seam: bundles in, results out. Path dependency during
-      # development; the host flips to the git dependency.
-      {:ash_rules, path: "/tmp/opencode/ash_rules_dev"},
+      # The rule engine seam: bundles in, results out.
+      {:ash_rules, github: "lukegalea/ash_rules"},
       # Control plane storage. Resources resolve their repo through
       # application env (:ash_compliance, :repo), so hosts wire their own.
       {:ash, "~> 3.5"},
