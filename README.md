@@ -38,6 +38,41 @@ outcome: the auditor's truth, deliberately distinct from the projection.
   `ash_rules`: `unknown` never collapses to `compliant`, and the data plane
   preserves that property end to end.
 
+## How it fits
+
+One compiler in the middle, one projector under it, and two artifacts that
+must never be conflated:
+
+```
+   control plane                        the compile
+┌──────────────────────────────┐
+│ Catalog / Controls           │   non-waivable global
+│ RuleSetRevisions (layers)    │     > global mandatory
+│ Profiles (tailoring ops)     │     > profile refinements
+│ Waivers (bounded, approved)  │     > tenant strengthening
+│ TenantPolicySets             │     > approved overrides
+└──────────────┬───────────────┘     > tenant supplements
+               │  fixed precedence, refused overreach
+               ▼
+┌──────────────────────────────────────────────────────────┐
+│ PolicyBundle — immutable, SHA-256 content-hashed,        │
+│ validate-before-activate; the only thing that evaluates  │
+└──────────────┬───────────────────────────────────────────┘
+               │  hash pinned
+               ▼
+   data plane                          the projection
+┌──────────────────────────────────────────────────────────┐
+│ event log ──► Projector ──► Findings        (the "now")  │
+│ (facts)     AshRules       ComplianceEvaluation        │
+│                             (the "why" — append-only)   │
+└──────────────────────────────────────────────────────────┘
+```
+
+The finding and the evaluation are deliberately different artifacts. The
+projection answers "is this subject compliant today"; the evaluation log
+answers "what did the engine decide, on which facts, under which bundle" —
+and no code path rewrites either.
+
 ## What it looks like
 
 Declare a rule set with `ash_rules` (its DSL, its verifiers), register it as
@@ -129,6 +164,37 @@ is nonetheless exposed as a **code interface on `AshCompliance.Domain`**
 bundle compile/activate/retire lifecycle, the OSCAL-facing reads, …) — hosts
 and this package's own internals call those, never raw `Ash.create!` /
 `Ash.Query` pipelines.
+
+### On screen
+
+The screenshots are the reference integration — customer KYC compliance in
+`ash_enterprise` — running live, unmodified:
+
+![The findings surface: controls, subjects, breach counts and the rule's own explanation, with unknowns leading](documentation/assets/findings.png)
+
+The status column is the outcome lattice on display. *Unknown* rows lead
+because they are the interesting ones: sanctions screening has not cleared,
+so the subject cannot be called compliant — and the "Why" column says
+exactly which fact is missing.
+
+![The evaluation log: one append-only row per decision, pinning the bundle hash, the missing facts and the source event](documentation/assets/evaluation-audit-trail.png)
+
+Every evaluation pins the content hash of the bundle that produced it. An
+auditor reconstructs any past decision from this table alone — no code path
+rewrites it.
+
+![Rule set revisions across the layering precedence, each with its lifecycle status](documentation/assets/rule-set-layers.png)
+
+Layers are a property of the revision: the non-waivable floor, the mandatory
+baseline (twice — revision 2 sits below as a draft, awaiting reviewed
+activation), the tenant's strengthening set.
+
+![The subject-facing view: projected users carrying their compliance status and open gap count as ordinary calculations](documentation/assets/subject-compliance.png)
+
+Findings project back onto the subject as plain calculations (`kyc_status`,
+`compliant?`, `gap_count`) — no rules engine in the query path. The same
+screen shows where each subject came from: the legacy estate's own rows,
+projected through the strangler ledger.
 
 ### Policies and authorization (host-owned)
 

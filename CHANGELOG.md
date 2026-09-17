@@ -14,6 +14,24 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 Nothing has been released yet. Everything below is the initial body of work.
 
+### Documentation:
+
+- README: the "how it fits" control-plane/data-plane diagram, and screenshots
+  from the reference integration (findings, the evaluation audit trail,
+  rule-set layers, the subject-facing compliance columns), captured live from
+  the `ash_enterprise` KYC demo.
+- `LICENSES/MIT.txt` added alongside the root `LICENSE`, matching the
+  first-party package convention; every documentation asset carries its
+  `.license` sidecar.
+
+### Changed:
+
+- Code interfaces for every public action on `AshCompliance.Domain`; the
+  compiler and OSCAL read paths moved from inline `Ash.Query` pipelines to
+  named read actions; host-facing entry points (`AshCompliance.Oscal`,
+  `AshCompliance.Testing.drain_sync/3`) thread optional `actor:`/`authorize?:`
+  with the trusted-machinery bypass documented at each internal site.
+
 ### Features:
 
 - Control plane: catalogs, controls, profiles (tailoring operations as data),
