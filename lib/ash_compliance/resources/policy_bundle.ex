@@ -97,6 +97,7 @@ defmodule AshCompliance.Resources.PolicyBundle do
 
     read :active_for_organization do
       argument(:organization_id, :uuid, allow_nil?: false)
+      get?(true)
       prepare(build(sort: [inserted_at: :desc], limit: 1))
       filter(expr(organization_id == ^arg(:organization_id) and status == :active))
     end

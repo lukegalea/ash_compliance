@@ -51,18 +51,22 @@ defmodule AshCompliance.Oscal do
   stores house-shaped operations verbatim.
   """
 
-  require Ash.Query
-
   alias AshCompliance.Oscal.ProfileOperation
 
-  alias AshCompliance.Resources.{
-    Catalog,
-    CatalogVersion,
-    Control,
-    ControlRevision,
-    Profile,
-    ProfileRevision
-  }
+  alias AshCompliance.Domain
+  # Aliased for the @spec types only; calls go through the domain interfaces.
+  alias AshCompliance.Resources.{Catalog, Profile}
+
+  # Host-facing entry points default to trusted machinery — no actor, no
+  # policy evaluation — because their callers are mix tasks and host consoles.
+  # A host that runs imports/exports inside a policy perimeter threads its own
+  # `actor:`/`authorize?:` through `opts`; everything below passes them on.
+  defp call_opts(opts) do
+    [
+      actor: Keyword.get(opts, :actor),
+      authorize?: Keyword.get(opts, :authorize?, false)
+    ]
+  end
 
   @doc "Imports an OSCAL catalog document (map or JSON string). Returns the created catalog."
   @spec import_catalog(map() | String.t(), keyword()) ::
@@ -78,69 +82,85 @@ defmodule AshCompliance.Oscal do
 
   def import_catalog(document, opts) when is_map(document) do
     organization_id = Keyword.get(opts, :organization_id)
+    opts = call_opts(opts)
 
     with {:ok, metadata} <- fetch_metadata(document),
          {:ok, controls} <- flatten_controls(document) do
       content_hash = hash_document(%{"controls" => controls})
 
       {:ok, catalog} =
-        Ash.create(Catalog, %{
-          organization_id: organization_id,
-          name: metadata.title,
-          description: metadata.description,
-          oscal_uuid: document["uuid"]
-        })
+        Domain.create_catalog(
+          %{
+            organization_id: organization_id,
+            name: metadata.title,
+            description: metadata.description,
+            oscal_uuid: document["uuid"]
+          },
+          opts
+        )
 
       {:ok, _version} =
-        Ash.create(CatalogVersion, %{
-          catalog_id: catalog.id,
-          version: metadata.version,
-          source: metadata.source,
-          content_hash: content_hash,
-          published_at: now()
-        })
+        Domain.create_catalog_version(
+          %{
+            catalog_id: catalog.id,
+            version: metadata.version,
+            source: metadata.source,
+            content_hash: content_hash,
+            published_at: now()
+          },
+          opts
+        )
 
       Enum.each(controls, fn control ->
         control_id = control["id"]
 
         {:ok, control_record} =
-          Ash.create(Control, %{
-            organization_id: organization_id,
-            catalog_id: catalog.id,
-            control_id: control_id,
-            title: control["title"],
-            family: control["family"] || group_family(document, control_id)
-          })
+          Domain.create_control(
+            %{
+              organization_id: organization_id,
+              catalog_id: catalog.id,
+              control_id: control_id,
+              title: control["title"],
+              family: control["family"] || group_family(document, control_id)
+            },
+            opts
+          )
 
         {:ok, _revision} =
-          Ash.create(ControlRevision, %{
-            control_id: control_record.id,
-            version: control["version"] || metadata.version,
-            statement: control["statement"] || control["title"],
-            params: control["params"] || [],
-            citations: control["citations"] || [],
-            status: :active
-          })
+          Domain.create_control_revision(
+            %{
+              control_id: control_record.id,
+              version: control["version"] || metadata.version,
+              statement: control["statement"] || control["title"],
+              params: control["params"] || [],
+              citations: control["citations"] || [],
+              status: :active
+            },
+            opts
+          )
       end)
 
       {:ok, catalog}
     end
   end
 
-  @doc "Exports a catalog (and its controls with active revisions) as an OSCAL-shaped document."
-  @spec export_catalog(Catalog.t()) :: {:ok, map()} | {:error, term()}
-  def export_catalog(catalog) do
+  @doc """
+  Exports a catalog (and its controls with active revisions) as an
+  OSCAL-shaped document.
+
+  Accepts `actor:`/`authorize?:` like the import functions; defaults to the
+  trusted-machinery bypass described at the top of this module.
+  """
+  @spec export_catalog(Catalog.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def export_catalog(catalog, opts \\ []) do
+    opts = call_opts(opts)
+
     controls =
-      Control
-      |> Ash.Query.filter(catalog_id == ^catalog.id)
-      |> Ash.read!(authorize?: false)
+      catalog.id
+      |> Domain.controls_for_catalog!(opts)
       |> Enum.sort_by(& &1.control_id)
       |> Enum.map(fn control ->
-        revisions =
-          ControlRevision
-          |> Ash.Query.filter(control_id == ^control.id and status == :active)
-          |> Ash.read!(authorize?: false)
-          |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+        revisions = Domain.active_control_revisions!(control.id, opts)
 
         case revisions do
           [] ->
@@ -157,13 +177,17 @@ defmodule AshCompliance.Oscal do
         end
       end)
 
+    # Non-raising: a catalog with no published version exports with a nil
+    # version (not_found_error? is false on the action).
+    {:ok, latest_version} = Domain.latest_catalog_version(catalog.id, opts)
+
     {:ok,
      %{
        "uuid" => catalog.oscal_uuid,
        "metadata" => %{
          "title" => catalog.name,
          "description" => catalog.description,
-         "version" => latest_version(catalog.id) && latest_version(catalog.id).version
+         "version" => latest_version && latest_version.version
        },
        "groups" => [%{"id" => "imported", "title" => "Imported controls", "controls" => controls}]
      }}
@@ -183,40 +207,52 @@ defmodule AshCompliance.Oscal do
 
   def import_profile(document, opts) when is_map(document) do
     organization_id = Keyword.fetch!(opts, :organization_id)
+    catalog_id = Keyword.get(opts, :catalog_id)
+    opts = call_opts(opts)
 
     with {:ok, metadata} <- fetch_metadata(document),
          {:ok, operations} <- derive_operations(document) do
       content_hash = hash_document(%{"operations" => operations})
 
       {:ok, profile} =
-        Ash.create(Profile, %{
-          organization_id: organization_id,
-          catalog_id: Keyword.get(opts, :catalog_id),
-          name: metadata.title,
-          oscal_uuid: document["uuid"]
-        })
+        Domain.create_profile(
+          %{
+            organization_id: organization_id,
+            catalog_id: catalog_id,
+            name: metadata.title,
+            oscal_uuid: document["uuid"]
+          },
+          opts
+        )
 
       {:ok, _revision} =
-        Ash.create(ProfileRevision, %{
-          profile_id: profile.id,
-          version: metadata.version,
-          source: metadata.source,
-          operations: operations,
-          content_hash: content_hash
-        })
+        Domain.create_profile_revision(
+          %{
+            profile_id: profile.id,
+            version: metadata.version,
+            source: metadata.source,
+            operations: operations,
+            content_hash: content_hash
+          },
+          opts
+        )
 
       {:ok, profile}
     end
   end
 
-  @doc "Exports a profile (latest revision's operations) as an OSCAL-shaped document."
-  @spec export_profile(Profile.t()) :: {:ok, map()} | {:error, term()}
-  def export_profile(profile) do
-    revisions =
-      ProfileRevision
-      |> Ash.Query.filter(profile_id == ^profile.id)
-      |> Ash.Query.sort(inserted_at: :desc)
-      |> Ash.read!(authorize?: false)
+  @doc """
+  Exports a profile (latest revision's operations) as an OSCAL-shaped
+  document.
+
+  Accepts `actor:`/`authorize?:` like the import functions; defaults to the
+  trusted-machinery bypass described at the top of this module.
+  """
+  @spec export_profile(Profile.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def export_profile(profile, opts \\ []) do
+    opts = call_opts(opts)
+
+    revisions = Domain.profile_revisions_for_profile!(profile.id, opts)
 
     operations =
       case revisions do
@@ -336,14 +372,6 @@ defmodule AshCompliance.Oscal do
     |> maybe_put("severity", normalized[:severity] && Atom.to_string(normalized[:severity]))
     |> maybe_put("message", normalized[:message])
     |> maybe_put("text", normalized[:text])
-  end
-
-  defp latest_version(catalog_id) do
-    CatalogVersion
-    |> Ash.Query.filter(catalog_id == ^catalog_id)
-    |> Ash.Query.sort(inserted_at: :desc)
-    |> Ash.Query.limit(1)
-    |> Ash.read_one!(authorize?: false)
   end
 
   # Deterministic hash: keys sorted, encoded as [key, value] pairs (tuples

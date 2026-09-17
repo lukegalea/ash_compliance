@@ -63,5 +63,13 @@ defmodule AshCompliance.Resources.ControlRevision do
     read :get_by_id do
       get_by([:id])
     end
+
+    read :active_for_control do
+      argument(:control_id, :uuid, allow_nil?: false)
+
+      prepare(build(sort: [inserted_at: :desc]))
+
+      filter(expr(control_id == ^arg(:control_id) and status == :active))
+    end
   end
 end

@@ -146,8 +146,7 @@ defmodule AshCompliance.Test.Support do
       content_hash: AshCompliance.Test.RuleSets.GlobalBaseline.__bundle__().content_hash
     ]
 
-    Ash.create!(AshCompliance.Resources.RuleSetRevision, Keyword.merge(defaults, attrs),
-      action: :draft,
+    AshCompliance.Domain.draft_rule_set_revision!(Keyword.merge(defaults, attrs),
       authorize?: false
     )
   end
@@ -185,21 +184,18 @@ defmodule AshCompliance.Test.Projector do
 
   project_all([:kyc_reviewed])
 
-  require Ash.Query
-
   def active_bundle(event) do
     organization_id = event.metadata["organization_id"]
 
-    bundle =
-      AshCompliance.Resources.PolicyBundle
-      |> Ash.Query.filter(organization_id == ^organization_id and status == :active)
-      |> Ash.Query.sort(inserted_at: :desc)
-      |> Ash.Query.limit(1)
-      |> Ash.read_one!(authorize?: false)
+    case AshCompliance.Domain.active_policy_bundle(organization_id, authorize?: false) do
+      {:ok, nil} ->
+        {:error, :no_active_bundle}
 
-    case bundle do
-      nil -> {:error, :no_active_bundle}
-      bundle -> AshRules.Ir.decode(bundle.rules_json)
+      {:ok, bundle} ->
+        AshRules.Ir.decode(bundle.rules_json)
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 end

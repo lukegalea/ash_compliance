@@ -186,4 +186,42 @@ defmodule AshCompliance.ProjectorTranslationTest do
     refute AshCompliance.Projector.Facts.snapshot_hash(event()) ==
              AshCompliance.Projector.Facts.snapshot_hash(changed)
   end
+
+  test "binary project_all names match existing atoms, never mint new ones" do
+    # A declared action name that has no existing atom — a typo, or config
+    # quoted out of somewhere it should not have come from — must skip with a
+    # log, not grow the atom table. The atom is minted after this string is
+    # built, so asserting it cannot be resolved back proves it was never
+    # created by the projector.
+    bogus = "compliance_no_such_action_#{System.unique_integer([:positive])}"
+
+    projector =
+      Module.concat(["AshCompliance.ProjectorEphemeral#{System.unique_integer([:positive])}"])
+
+    source = """
+    defmodule #{inspect(projector)} do
+      use AshCompliance.Projector,
+        name: "ephemeral_skip_v1",
+        event_log: AshCompliance.Test.Events.Event,
+        projection_resource: AshCompliance.Resources.Finding,
+        bundle: {AshCompliance.Test.Projector, :active_bundle, []}
+
+      project_all ["#{bogus}"]
+    end
+    """
+
+    assert [{^projector, _bytecode}] = Code.compile_string(source, "#{projector}.ex")
+
+    on_exit(fn ->
+      :code.purge(projector)
+      :code.delete(projector)
+    end)
+
+    # the binary was never turned into an atom
+    assert_raise ArgumentError, fn -> String.to_existing_atom(bogus) end
+
+    # and events fall through to the skip fallbacks, with no stateful clause
+    assert projector.handle_event(%{action: :kyc_reviewed}) == :skip
+    assert projector.needs_current_state?(%{action: :kyc_reviewed}) == false
+  end
 end

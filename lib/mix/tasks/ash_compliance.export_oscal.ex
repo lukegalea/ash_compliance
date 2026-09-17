@@ -25,18 +25,28 @@ defmodule Mix.Tasks.AshCompliance.ExportOscal do
     type = Keyword.get(opts, :type, "catalog")
     id = opts[:id] || Mix.raise("--id is required")
 
+    # Ops tooling: raw `Ash` calls here would bypass the domain contract, and
+    # a mix task has no actor to attribute. The trusted-machinery bypass is
+    # the package's documented default for host-facing entry points; the
+    # Oscal functions accept `actor:`/`authorize?:` for wired contexts.
     result =
       case type do
         "catalog" ->
-          with {:ok, catalog} <-
-                 Ash.get(AshCompliance.Resources.Catalog, normalize_uuid(id), authorize?: false) do
-            AshCompliance.Oscal.export_catalog(catalog)
+          case AshCompliance.Domain.get_catalog_by_id(normalize_uuid(id), authorize?: false) do
+            {:ok, %AshCompliance.Resources.Catalog{} = catalog} ->
+              AshCompliance.Oscal.export_catalog(catalog)
+
+            _ ->
+              {:error, :does_not_exist}
           end
 
         "profile" ->
-          with {:ok, profile} <-
-                 Ash.get(AshCompliance.Resources.Profile, normalize_uuid(id), authorize?: false) do
-            AshCompliance.Oscal.export_profile(profile)
+          case AshCompliance.Domain.get_profile_by_id(normalize_uuid(id), authorize?: false) do
+            {:ok, %AshCompliance.Resources.Profile{} = profile} ->
+              AshCompliance.Oscal.export_profile(profile)
+
+            _ ->
+              {:error, :does_not_exist}
           end
 
         other ->

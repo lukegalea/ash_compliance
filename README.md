@@ -45,27 +45,26 @@ a revision, compile the tenant's bundle, and let the projector keep the
 findings current:
 
 ```elixir
-# One-time setup per tenant (see the layering topic for the full flow)
+# One-time setup per tenant (see the layering topic for the full flow).
+# Everything below goes through the AshCompliance.Domain code interfaces.
 revision =
-  AshCompliance.Resources.RuleSetRevision
-  |> Ash.create!(%{
+  AshCompliance.Domain.draft_rule_set_revision!(%{
     organization_id: org_id,
     name: "kyc-baseline",
     layer: :global_mandatory,
     rules_json: AshRules.Ir.encode!(MyApp.Compliance.Rules.__bundle__()),
     content_hash: MyApp.Compliance.Rules.__bundle__().content_hash
-  }, action: :draft)
+  })
 
 revision
-|> Ash.Changeset.for_update(:validate) |> Ash.update!()
-|> Ash.Changeset.for_update(:approve)  |> Ash.update!()
-|> Ash.Changeset.for_update(:activate) |> Ash.update!()
+|> AshCompliance.Domain.validate_rule_set_revision!()
+|> AshCompliance.Domain.approve_rule_set_revision!()
+|> AshCompliance.Domain.activate_rule_set_revision!()
 
-{:ok, bundle} = Ash.create(AshCompliance.Resources.PolicyBundle,
-  %{organization_id: org_id}, action: :compile)
+{:ok, bundle} =
+  AshCompliance.Domain.compile_policy_bundle(%{organization_id: org_id})
 
-bundle
-|> Ash.Changeset.for_update(:activate) |> Ash.update!()
+AshCompliance.Domain.activate_policy_bundle!(bundle)
 ```
 
 Then the projector keeps the findings current from your domain events:
@@ -124,7 +123,40 @@ checkpointing and dead-lettering handled by the projector engine.
   `mix ash_compliance.export_oscal` tasks.
 
 There is deliberately **no API layer**: resources, actions, the compiler and
-the projector only. Wire exposure is the host's concern.
+the projector only. Wire exposure is the host's concern. Every public action
+is nonetheless exposed as a **code interface on `AshCompliance.Domain`**
+(`record_evaluation/2`, `get_finding_by_id/2`, `active_policy_bundle/2`, the
+bundle compile/activate/retire lifecycle, the OSCAL-facing reads, …) — hosts
+and this package's own internals call those, never raw `Ash.create!` /
+`Ash.Query` pipelines.
+
+### Policies and authorization (host-owned)
+
+The package ships **no policy blocks**: which actor may waive which control
+is a decision for the host, made by attaching `Ash.Policy.Authorizer` to the
+resources it hosts. The seam is the `actor:`/`authorize?:` options every
+domain interface, `AshCompliance.Oscal` function and
+`AshCompliance.Testing.drain_sync/3` call accepts. Inside the package,
+`authorize?: false` appears only in **trusted machinery** — the compiler
+gather, the projector's evaluation write, the `set_active_bundle` check, and
+the mix tasks — each with a justification comment at the site; none of them
+carry a user request. If your policies must fire on those paths, that is a
+design conversation, not a config flag.
+
+### Tenancy (by explicit organization, by design)
+
+These resources do **not** use Ash multitenancy (`strategy :attribute`).
+Tenancy is carried by explicit `organization_id` attributes and per-
+organization read actions (`active_rule_set_revisions`, `valid_policy_overrides`,
+`findings_for_organization`, …), and on the data plane by the finding grain
+`[organization_id, control_id, subject_type, subject_id]` itself. That is a
+deliberate design: compliance rows must be queryable and referential across
+tenants (shared catalogs with `organization_id: nil`, control mappings,
+evidence), and schema-per-tenant style partitioning would fracture exactly
+the joins the control plane exists for. Tenant isolation is asserted by the
+compiler (an override for tenant A never reaches tenant B's compile) and by
+the grain, not by a query filter bolted on at each call site.
+
 
 ## Installation
 

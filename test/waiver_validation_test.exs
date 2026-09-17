@@ -9,8 +9,6 @@ defmodule AshCompliance.WaiverValidationTest do
 
   use AshCompliance.DataCase, async: true
 
-  require Ash.Query
-
   @org Ecto.UUID.generate()
   @now DateTime.from_iso8601("2026-09-17T12:00:00Z") |> elem(1)
 
@@ -29,13 +27,15 @@ defmodule AshCompliance.WaiverValidationTest do
   end
 
   test "a fully-specified waiver is accepted" do
-    assert {:ok, _} = Ash.create(AshCompliance.Resources.PolicyOverride, base_attrs())
+    assert {:ok, _} = AshCompliance.Domain.create_policy_override(base_attrs(), authorize?: false)
   end
 
   test "an open-ended waiver (no expires_at) is refused" do
     attrs = Map.delete(base_attrs(), :expires_at)
 
-    assert {:error, errors} = Ash.create(AshCompliance.Resources.PolicyOverride, attrs)
+    assert {:error, errors} =
+             AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+
     assert Enum.any?(errors.errors, &(&1.message =~ "bounded time"))
   end
 
@@ -46,21 +46,27 @@ defmodule AshCompliance.WaiverValidationTest do
         expires_at: DateTime.add(@now, 24 * 3600, :second)
       })
 
-    assert {:error, errors} = Ash.create(AshCompliance.Resources.PolicyOverride, attrs)
+    assert {:error, errors} =
+             AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+
     assert Enum.any?(errors.errors, &(&1.message =~ "must be after its starts_at"))
   end
 
   test "a waiver without compensating controls is refused" do
     attrs = Map.put(base_attrs(), :compensating_controls, [])
 
-    assert {:error, errors} = Ash.create(AshCompliance.Resources.PolicyOverride, attrs)
+    assert {:error, errors} =
+             AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+
     assert Enum.any?(errors.errors, &(&1.message =~ "compensating_controls"))
   end
 
   test "a waiver without an approver is refused" do
     attrs = Map.put(base_attrs(), :approver, "")
 
-    assert {:error, errors} = Ash.create(AshCompliance.Resources.PolicyOverride, attrs)
+    assert {:error, errors} =
+             AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+
     assert Enum.any?(errors.errors, &(&1.message =~ "named approver"))
   end
 
@@ -72,7 +78,9 @@ defmodule AshCompliance.WaiverValidationTest do
         compensating_controls: []
       })
 
-    assert {:error, errors} = Ash.create(AshCompliance.Resources.PolicyOverride, attrs)
+    assert {:error, errors} =
+             AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+
     assert Enum.any?(errors.errors, &(&1.message =~ "replacement_rules_json"))
   end
 end

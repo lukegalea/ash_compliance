@@ -84,6 +84,11 @@ defmodule AshCompliance.Resources.Finding do
       filter(expr(organization_id == ^arg(:organization_id) and status == :noncompliant))
     end
 
+    read :for_organization do
+      argument(:organization_id, :uuid, allow_nil?: false)
+      filter(expr(organization_id == ^arg(:organization_id)))
+    end
+
     read :get_by_id do
       get_by([:id])
     end

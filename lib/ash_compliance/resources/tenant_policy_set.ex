@@ -47,6 +47,7 @@ defmodule AshCompliance.Resources.TenantPolicySet do
 
     read :for_organization do
       argument(:organization_id, :uuid, allow_nil?: false)
+      get?(true)
       prepare(build(limit: 1))
       filter(expr(organization_id == ^arg(:organization_id)))
     end

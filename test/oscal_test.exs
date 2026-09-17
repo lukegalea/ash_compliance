@@ -9,10 +9,7 @@ defmodule AshCompliance.OscalTest do
 
   use AshCompliance.DataCase, async: true
 
-  require Ash.Query
-
   alias AshCompliance.Oscal
-  alias AshCompliance.Resources.{Control, ControlRevision, ProfileRevision}
 
   @org Ecto.UUID.generate()
 
@@ -62,9 +59,8 @@ defmodule AshCompliance.OscalTest do
       assert catalog.oscal_uuid == "cat-uuid-1"
 
       controls =
-        Control
-        |> Ash.Query.filter(catalog_id == ^catalog.id)
-        |> Ash.read!(authorize?: false)
+        catalog.id
+        |> AshCompliance.Domain.controls_for_catalog!(authorize?: false)
         |> Enum.sort_by(& &1.control_id)
 
       assert Enum.map(controls, & &1.control_id) == ["kyc.review", "kyc.valid_required"]
@@ -72,9 +68,7 @@ defmodule AshCompliance.OscalTest do
       valid_required = Enum.find(controls, &(&1.control_id == "kyc.valid_required"))
 
       revisions =
-        ControlRevision
-        |> Ash.Query.filter(control_id == ^valid_required.id)
-        |> Ash.read!(authorize?: false)
+        AshCompliance.Domain.active_control_revisions!(valid_required.id, authorize?: false)
 
       assert [%{status: :active, params: [%{"id" => "window"}], citations: ["Policy 4.1"]}] =
                revisions
@@ -119,9 +113,7 @@ defmodule AshCompliance.OscalTest do
       assert profile.name == "Tenant tailoring"
 
       [revision] =
-        ProfileRevision
-        |> Ash.Query.filter(profile_id == ^profile.id)
-        |> Ash.read!(authorize?: false)
+        AshCompliance.Domain.profile_revisions_for_profile!(profile.id, authorize?: false)
 
       ops = revision.operations
 

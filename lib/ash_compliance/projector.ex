@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 
 defmodule AshCompliance.Projector do
+  require Logger
+
   @moduledoc """
   Macro wrapper around the `AshEvents.Projections` projector contract that
   adds the compliance translation: hydrate facts from the event, evaluate the
@@ -109,9 +111,7 @@ defmodule AshCompliance.Projector do
     {stateless, stateful} = Enum.split_with(handlers, fn {_, _, _, arity} -> arity == 1 end)
 
     translation_clauses =
-      for action <- List.wrap(project_all) do
-        action = to_action_atom(action)
-
+      for action <- List.wrap(project_all), action = to_action_atom(action) do
         quote do
           def handle_event(%{action: unquote(action)} = event, current_row) do
             AshCompliance.Projector.translate(event, current_row, __MODULE__)
@@ -207,17 +207,32 @@ defmodule AshCompliance.Projector do
   end
 
   defp translation_needs_state_clauses(actions) do
-    for action <- List.wrap(actions) do
-      action = to_action_atom(action)
-
+    for action <- List.wrap(actions), action = to_action_atom(action) do
       quote do
         def needs_current_state?(%{action: unquote(action)}), do: true
       end
     end
   end
 
+  # Action names arrive from host declarations, which may spell them as
+  # binaries (e.g. quoted from configuration). Never create an atom from that
+  # string: the action must already exist — the host's event log and resources
+  # compiled it — so `to_existing_atom/1` is the safe conversion. A name with
+  # no existing atom can never arrive as an event anyway; it skips with a log
+  # instead of growing the atom table from declaration data.
   defp to_action_atom(action) when is_atom(action), do: action
-  defp to_action_atom(action) when is_binary(action), do: String.to_atom(action)
+
+  defp to_action_atom(action) when is_binary(action) do
+    String.to_existing_atom(action)
+  rescue
+    ArgumentError ->
+      Logger.warning(
+        "AshCompliance.Projector: declared action #{inspect(action)} has no existing atom " <>
+          "and cannot fire; skipping its translation clause"
+      )
+
+      nil
+  end
 
   @doc """
   The evaluator-to-ops translation: one event plus the current finding row
@@ -422,6 +437,11 @@ defmodule AshCompliance.Projector do
 
   # The evaluation is the auditor's truth: it is written transactionally with
   # the projection ops, so it can never disagree with the finding row.
+  #
+  # Trusted machinery: the projector engine writes this inside the projection
+  # transaction with no user request attached, so `authorize?: false` is
+  # deliberate here. Hosts attach policies to their own call paths (see the
+  # README); the domain interface `record_evaluation/2` is the public route.
   defp record_evaluation(event, current_row, bundle, result) do
     metadata = event[:metadata] || %{}
 
@@ -443,10 +463,7 @@ defmodule AshCompliance.Projector do
       evaluated_at: event[:occurred_at]
     }
 
-    Ash.create!(AshCompliance.Resources.ComplianceEvaluation, attrs,
-      action: :record,
-      authorize?: false
-    )
+    AshCompliance.Domain.record_evaluation!(attrs, authorize?: false)
   end
 
   defp format_missing({subject, name, value}), do: "#{subject}/#{name} (#{inspect(value)})"

@@ -22,8 +22,11 @@ defmodule AshCompliance do
       `AshCompliance.Oscal` and the `mix ash_compliance.import_oscal` /
       `mix ash_compliance.export_oscal` tasks.
 
-  There is deliberately **no API layer**: resources, actions, the compiler and
-  the projector only. Wire exposure is the host's concern.
+  There is deliberately **no wire API layer**: resources, actions, the
+  compiler and the projector only. Wire exposure is the host's concern. Every
+  public action is exposed as a code interface on `AshCompliance.Domain` —
+  that is the supported way to call into this package, for hosts and for this
+  package's own internals alike.
 
   ## Host wiring
 

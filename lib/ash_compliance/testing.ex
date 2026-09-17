@@ -21,9 +21,27 @@ defmodule AshCompliance.Testing do
 
   Events are the normalized rows the projector engine produces; create them
   with `AshCompliance.Testing.event/2` in tests, or read them from the log.
+
+  Options:
+
+    * `:actor` — attributed actor for the grain upsert and the projection-op
+      apply (default: none)
+    * `:authorize?:` — run those writes through authorization (default:
+      `false`, trusted machinery). Hosts whose finding resource carries
+      policies pass `authorize?: true` plus an `actor:` here to exercise
+      them.
+
   """
-  @spec drain_sync(module(), [map()]) :: :ok
-  def drain_sync(projector, events) do
+  @spec drain_sync(module(), [map()], keyword()) :: :ok
+  def drain_sync(projector, events, opts \\ []) do
+    # Host-facing entry point: defaults to the trusted-machinery bypass so a
+    # test drain works without wiring an actor, but actor:/authorize?: thread
+    # through for hosts that must run the drain under their own policies.
+    opts = [
+      actor: Keyword.get(opts, :actor),
+      authorize?: Keyword.get(opts, :authorize?, false)
+    ]
+
     Enum.each(events, fn event ->
       grain_key = projector.__grain__().(event)
 
@@ -32,13 +50,18 @@ defmodule AshCompliance.Testing do
           if projector.needs_current_state?(event) do
             Ash.create!(projector.__projection_resource__(), grain_key,
               action: :upsert_grain,
-              authorize?: false
+              actor: opts[:actor],
+              authorize?: opts[:authorize?]
             )
           end
 
         case projector.handle_event(event, row) do
           {:ok, ops} when ops != [] ->
-            Ash.update!(row, %{ops: ops}, action: :apply_projection_ops, authorize?: false)
+            Ash.update!(row, %{ops: ops},
+              action: :apply_projection_ops,
+              actor: opts[:actor],
+              authorize?: opts[:authorize?]
+            )
 
           _ ->
             :ok

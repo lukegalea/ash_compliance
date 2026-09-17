@@ -9,29 +9,30 @@ defmodule AshCompliance.ResourcesTest do
 
   use AshCompliance.DataCase, async: true
 
-  require Ash.Query
-
   @org Ecto.UUID.generate()
   @now DateTime.from_iso8601("2026-09-17T12:00:00Z") |> elem(1)
 
   describe "EvidenceArtifact" do
     test "creates with hash, method and custody chain" do
       {:ok, artifact} =
-        Ash.create(AshCompliance.Resources.EvidenceArtifact, %{
-          organization_id: @org,
-          control_id: "kyc.valid_required",
-          subject_type: "customer",
-          subject_id: "cus_1",
-          hash: String.duplicate("ab", 32),
-          media_type: "application/pdf",
-          collector: "kyc-vendor",
-          method: :examine,
-          chain_of_custody: [
-            %{"at" => "2026-09-17T12:00:00Z", "actor" => "collector", "action" => "collected"}
-          ],
-          retention_class: "7y",
-          collected_at: @now
-        })
+        AshCompliance.Domain.create_evidence_artifact(
+          %{
+            organization_id: @org,
+            control_id: "kyc.valid_required",
+            subject_type: "customer",
+            subject_id: "cus_1",
+            hash: String.duplicate("ab", 32),
+            media_type: "application/pdf",
+            collector: "kyc-vendor",
+            method: :examine,
+            chain_of_custody: [
+              %{"at" => "2026-09-17T12:00:00Z", "actor" => "collector", "action" => "collected"}
+            ],
+            retention_class: "7y",
+            collected_at: @now
+          },
+          authorize?: false
+        )
 
       assert artifact.method == :examine
       assert artifact.hash == String.duplicate("ab", 32)
@@ -48,35 +49,41 @@ defmodule AshCompliance.ResourcesTest do
 
     test "an unknown assessment method is refused" do
       assert {:error, _} =
-               Ash.create(AshCompliance.Resources.EvidenceArtifact, %{
-                 organization_id: @org,
-                 control_id: "kyc.valid_required",
-                 hash: String.duplicate("cd", 32),
-                 media_type: "text/plain",
-                 collector: "auditor",
-                 method: :vibes,
-                 collected_at: @now
-               })
+               AshCompliance.Domain.create_evidence_artifact(
+                 %{
+                   organization_id: @org,
+                   control_id: "kyc.valid_required",
+                   hash: String.duplicate("cd", 32),
+                   media_type: "text/plain",
+                   collector: "auditor",
+                   method: :vibes,
+                   collected_at: @now
+                 },
+                 authorize?: false
+               )
     end
   end
 
   describe "ComplianceEvaluation" do
     test "is append-only: create and read, no updates" do
       {:ok, evaluation} =
-        Ash.create(AshCompliance.Resources.ComplianceEvaluation, %{
-          organization_id: @org,
-          control_id: "kyc.valid_required",
-          subject_type: "customer",
-          subject_id: "cus_1",
-          bundle_hash: String.duplicate("ef", 32),
-          evaluator: "AshRules.Evaluator.Direct",
-          outcome: :unknown,
-          fact_snapshot_hash: String.duplicate("ab", 32),
-          missing_facts: ["customer/has_valid_kyc"],
-          correlation_id: "corr-9",
-          source_event_id: "42",
-          evaluated_at: @now
-        })
+        AshCompliance.Domain.record_evaluation(
+          %{
+            organization_id: @org,
+            control_id: "kyc.valid_required",
+            subject_type: "customer",
+            subject_id: "cus_1",
+            bundle_hash: String.duplicate("ef", 32),
+            evaluator: "AshRules.Evaluator.Direct",
+            outcome: :unknown,
+            fact_snapshot_hash: String.duplicate("ab", 32),
+            missing_facts: ["customer/has_valid_kyc"],
+            correlation_id: "corr-9",
+            source_event_id: "42",
+            evaluated_at: @now
+          },
+          authorize?: false
+        )
 
       assert evaluation.outcome == :unknown
 
@@ -92,20 +99,21 @@ defmodule AshCompliance.ResourcesTest do
   describe "ControlMapping" do
     test "maps a gap to a control per organization" do
       {:ok, mapping} =
-        Ash.create(AshCompliance.Resources.ControlMapping, %{
-          organization_id: @org,
-          gap: "kyc.valid_required",
-          control_id: "kyc.valid_required",
-          jurisdiction: "regulated",
-          notes: "primary filing"
-        })
+        AshCompliance.Domain.create_control_mapping(
+          %{
+            organization_id: @org,
+            gap: "kyc.valid_required",
+            control_id: "kyc.valid_required",
+            jurisdiction: "regulated",
+            notes: "primary filing"
+          },
+          authorize?: false
+        )
 
       assert mapping.gap == "kyc.valid_required"
 
       mappings =
-        AshCompliance.Resources.ControlMapping
-        |> Ash.Query.filter(organization_id == ^@org and gap == "kyc.valid_required")
-        |> Ash.read!(authorize?: false)
+        AshCompliance.Domain.mapping_by_gap!("kyc.valid_required", @org, authorize?: false)
 
       assert length(mappings) == 1
     end

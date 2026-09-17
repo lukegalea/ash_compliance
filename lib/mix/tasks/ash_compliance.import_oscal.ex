@@ -38,6 +38,9 @@ defmodule Mix.Tasks.AshCompliance.ImportOscal do
     type = Keyword.get(opts, :type, "catalog")
     organization_id = opts[:org] && normalize_uuid(opts[:org])
 
+    # Ops tooling: a mix task has no actor to attribute, so the import runs
+    # under the package's trusted-machinery default. `AshCompliance.Oscal`
+    # accepts `actor:`/`authorize?:` for hosts that call it from wired code.
     result =
       case type do
         "catalog" ->

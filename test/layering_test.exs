@@ -285,60 +285,69 @@ defmodule AshCompliance.LayeringTest do
 
   defp activate_revision(revision) do
     revision
-    |> Ash.Changeset.for_update(:validate)
-    |> Ash.update!(authorize?: false)
-    |> Ash.Changeset.for_update(:approve)
-    |> Ash.update!(authorize?: false)
-    |> Ash.Changeset.for_update(:activate)
-    |> Ash.update!(authorize?: false)
+    |> AshCompliance.Domain.validate_rule_set_revision!(authorize?: false)
+    |> AshCompliance.Domain.approve_rule_set_revision!(authorize?: false)
+    |> AshCompliance.Domain.activate_rule_set_revision!(authorize?: false)
   end
 
   defp waive(rule_id, opts) do
-    Ash.create!(AshCompliance.Resources.PolicyOverride, %{
-      organization_id: @org,
-      kind: :waive,
-      rule_id: rule_id,
-      reason: "documented operational exception",
-      approver: "security-officer",
-      approved_at: @now,
-      starts_at: Keyword.get(opts, :starts_at, @now),
-      expires_at: opts[:expires_at],
-      compensating_controls: ["manual-review"]
-    })
+    AshCompliance.Domain.create_policy_override!(
+      %{
+        organization_id: @org,
+        kind: :waive,
+        rule_id: rule_id,
+        reason: "documented operational exception",
+        approver: "security-officer",
+        approved_at: @now,
+        starts_at: Keyword.get(opts, :starts_at, @now),
+        expires_at: opts[:expires_at],
+        compensating_controls: ["manual-review"]
+      },
+      authorize?: false
+    )
   end
 
   defp replace(rule_id, json) do
-    Ash.create!(AshCompliance.Resources.PolicyOverride, %{
-      organization_id: @org,
-      kind: :replace,
-      rule_id: rule_id,
-      reason: "equivalent local control",
-      approver: "security-officer",
-      approved_at: @now,
-      replacement_rules_json: json,
-      compensating_controls: []
-    })
+    AshCompliance.Domain.create_policy_override!(
+      %{
+        organization_id: @org,
+        kind: :replace,
+        rule_id: rule_id,
+        reason: "equivalent local control",
+        approver: "security-officer",
+        approved_at: @now,
+        replacement_rules_json: json,
+        compensating_controls: []
+      },
+      authorize?: false
+    )
   end
 
   defp profile_revision_with(operation) do
     {:ok, profile} =
-      Ash.create(AshCompliance.Resources.Profile, %{
-        organization_id: @org,
-        name: "profile-" <> Support.unique()
-      })
+      AshCompliance.Domain.create_profile(
+        %{organization_id: @org, name: "profile-" <> Support.unique()},
+        authorize?: false
+      )
 
     {:ok, revision} =
-      Ash.create(AshCompliance.Resources.ProfileRevision, %{
-        profile_id: profile.id,
-        version: "1",
-        operations: [operation],
-        content_hash: Support.unique()
-      })
+      AshCompliance.Domain.create_profile_revision(
+        %{
+          profile_id: profile.id,
+          version: "1",
+          operations: [operation],
+          content_hash: Support.unique()
+        },
+        authorize?: false
+      )
 
-    Ash.create!(AshCompliance.Resources.TenantPolicySet, %{
-      organization_id: @org,
-      name: "policy-set",
-      profile_revision_ids: [revision.id]
-    })
+    AshCompliance.Domain.create_tenant_policy_set!(
+      %{
+        organization_id: @org,
+        name: "policy-set",
+        profile_revision_ids: [revision.id]
+      },
+      authorize?: false
+    )
   end
 end

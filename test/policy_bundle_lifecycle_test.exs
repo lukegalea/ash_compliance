@@ -9,7 +9,6 @@ defmodule AshCompliance.PolicyBundleLifecycleTest do
 
   use AshCompliance.DataCase, async: true
 
-  alias AshCompliance.Resources.{PolicyBundle, RuleSetRevision}
   alias AshCompliance.Test.Support
 
   @org Ecto.UUID.generate()
@@ -19,24 +18,15 @@ defmodule AshCompliance.PolicyBundleLifecycleTest do
 
     assert revision.status == :draft
 
-    revision =
-      revision
-      |> Ash.Changeset.for_update(:validate)
-      |> Ash.update!(authorize?: false)
+    revision = AshCompliance.Domain.validate_rule_set_revision!(revision, authorize?: false)
 
     assert revision.status == :validated
 
-    revision =
-      revision
-      |> Ash.Changeset.for_update(:approve)
-      |> Ash.update!(authorize?: false)
+    revision = AshCompliance.Domain.approve_rule_set_revision!(revision, authorize?: false)
 
     assert revision.status == :approved
 
-    revision =
-      revision
-      |> Ash.Changeset.for_update(:activate)
-      |> Ash.update!(authorize?: false)
+    revision = AshCompliance.Domain.activate_rule_set_revision!(revision, authorize?: false)
 
     assert revision.status == :active
   end
@@ -45,23 +35,16 @@ defmodule AshCompliance.PolicyBundleLifecycleTest do
     revision = Support.rule_set_revision(name: "lifecycle-" <> Support.unique())
 
     assert {:error, _} =
-             revision
-             |> Ash.Changeset.for_update(:approve)
-             |> Ash.update(authorize?: false)
+             AshCompliance.Domain.approve_rule_set_revision(revision, authorize?: false)
   end
 
   test "an active revision cannot be revoked, only retired" do
     revision = activate(Support.rule_set_revision(name: "lifecycle-" <> Support.unique()))
 
     assert {:error, _} =
-             revision
-             |> Ash.Changeset.for_update(:revoke)
-             |> Ash.update(authorize?: false)
+             AshCompliance.Domain.revoke_rule_set_revision(revision, authorize?: false)
 
-    retired =
-      revision
-      |> Ash.Changeset.for_update(:retire)
-      |> Ash.update!(authorize?: false)
+    retired = AshCompliance.Domain.retire_rule_set_revision!(revision, authorize?: false)
 
     assert retired.status == :retired
   end
@@ -70,10 +53,9 @@ defmodule AshCompliance.PolicyBundleLifecycleTest do
     activate(Support.rule_set_revision(name: "baseline-" <> Support.unique()))
 
     {:ok, bundle} =
-      Ash.create(
-        PolicyBundle,
+      AshCompliance.Domain.compile_policy_bundle(
         %{organization_id: @org, label: "first compile"},
-        action: :compile
+        authorize?: false
       )
 
     assert bundle.status == :compiled
@@ -89,7 +71,7 @@ defmodule AshCompliance.PolicyBundleLifecycleTest do
     activate(Support.rule_set_revision(name: "baseline-" <> Support.unique()))
 
     {:ok, bundle} =
-      Ash.create(PolicyBundle, %{organization_id: @org}, action: :compile)
+      AshCompliance.Domain.compile_policy_bundle(%{organization_id: @org}, authorize?: false)
 
     # corrupt the stored JSON behind Ash's back (storage-level tampering)
     Ecto.Adapters.SQL.query!(
@@ -100,15 +82,13 @@ defmodule AshCompliance.PolicyBundleLifecycleTest do
       ]
     )
 
-    reloaded = Ash.get!(PolicyBundle, bundle.id, authorize?: false)
+    reloaded = AshCompliance.Domain.get_policy_bundle_by_id!(bundle.id, authorize?: false)
 
     assert {:error, _} =
-             reloaded
-             |> Ash.Changeset.for_update(:activate)
-             |> Ash.update(authorize?: false)
+             AshCompliance.Domain.activate_policy_bundle(reloaded, authorize?: false)
 
     # the tampered bundle stays compiled, never active
-    reloaded = Ash.get!(PolicyBundle, bundle.id, authorize?: false)
+    reloaded = AshCompliance.Domain.get_policy_bundle_by_id!(bundle.id, authorize?: false)
     assert reloaded.status == :compiled
   end
 
@@ -116,28 +96,21 @@ defmodule AshCompliance.PolicyBundleLifecycleTest do
     activate(Support.rule_set_revision(name: "baseline-" <> Support.unique()))
 
     bundle =
-      Ash.create!(PolicyBundle, %{organization_id: @org}, action: :compile)
-      |> Ash.Changeset.for_update(:activate)
-      |> Ash.update!(authorize?: false)
+      AshCompliance.Domain.compile_policy_bundle!(%{organization_id: @org}, authorize?: false)
+      |> AshCompliance.Domain.activate_policy_bundle!(authorize?: false)
 
     assert bundle.status == :active
     assert bundle.active_at != nil
 
-    retired =
-      bundle
-      |> Ash.Changeset.for_update(:retire)
-      |> Ash.update!(authorize?: false)
+    retired = AshCompliance.Domain.retire_policy_bundle!(bundle, authorize?: false)
 
     assert retired.status == :retired
   end
 
   defp activate(revision) do
     revision
-    |> Ash.Changeset.for_update(:validate)
-    |> Ash.update!(authorize?: false)
-    |> Ash.Changeset.for_update(:approve)
-    |> Ash.update!(authorize?: false)
-    |> Ash.Changeset.for_update(:activate)
-    |> Ash.update!(authorize?: false)
+    |> AshCompliance.Domain.validate_rule_set_revision!(authorize?: false)
+    |> AshCompliance.Domain.approve_rule_set_revision!(authorize?: false)
+    |> AshCompliance.Domain.activate_rule_set_revision!(authorize?: false)
   end
 end

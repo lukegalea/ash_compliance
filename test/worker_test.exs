@@ -9,8 +9,6 @@ defmodule AshCompliance.Workers.NotifyProjectorsTest do
 
   use AshCompliance.DataCase, async: false
 
-  require Ash.Query
-
   alias AshCompliance.Workers.NotifyProjectors
 
   test "perform nudges the configured projectors and succeeds even when none run" do

@@ -32,16 +32,8 @@ defmodule AshCompliance.Compiler do
   compiled `PolicyBundle` stores.
   """
 
-  require Ash.Query
-
   alias AshCompliance.Compiler.Layer
-
-  alias AshCompliance.Resources.{
-    PolicyOverride,
-    ProfileRevision,
-    RuleSetRevision,
-    TenantPolicySet
-  }
+  alias AshCompliance.Domain
 
   alias AshRules.Ir
   alias AshRules.Ir.Bundle
@@ -112,6 +104,11 @@ defmodule AshCompliance.Compiler do
 
   # --- gathering ---------------------------------------------------------------
 
+  # Trusted machinery: the compile is a headless system operation (the
+  # PolicyBundle compile action, a host console, a worker) — no user request
+  # is attached, so these reads run under `authorize?: false` on purpose.
+  # Host-facing entry points thread `actor:`/`authorize?:` instead (see
+  # `AshCompliance.Oscal` and `AshCompliance.Testing`).
   defp gather(organization_id, now) do
     {:ok,
      %{
@@ -124,45 +121,27 @@ defmodule AshCompliance.Compiler do
   end
 
   defp active_rule_sets(organization_id) do
-    # Two reads: `IN (NULL, x)` never matches NULL in SQL, and the analyzer
-    # objects to `== nil` -- so the shared-baseline scan is its own query.
-    global =
-      RuleSetRevision
-      |> Ash.Query.filter(status == :active and is_nil(organization_id))
-      |> Ash.read!(authorize?: false)
-
-    tenant =
-      RuleSetRevision
-      |> Ash.Query.filter(status == :active and organization_id == ^organization_id)
-      |> Ash.read!(authorize?: false)
-
-    global ++ tenant
+    Domain.active_rule_set_revisions!(organization_id, authorize?: false)
   end
 
   defp profile_revisions(organization_id) do
-    case tenant_policy_set(organization_id) do
+    # Absence is meaningful: no tenant policy set yet means no tailoring, so
+    # the action carries not_found_error?: false and yields {:ok, nil}.
+    {:ok, policy_set} = Domain.tenant_policy_set(organization_id, authorize?: false)
+
+    case policy_set do
       nil ->
         []
 
       policy_set ->
         Enum.map(policy_set.profile_revision_ids, fn id ->
-          Ash.get!(ProfileRevision, id, authorize?: false)
+          Domain.get_profile_revision_by_id!(id, authorize?: false)
         end)
     end
   end
 
-  defp tenant_policy_set(organization_id) do
-    TenantPolicySet
-    |> Ash.Query.filter(organization_id == ^organization_id)
-    |> Ash.read_one!(authorize?: false)
-  end
-
   defp valid_overrides(organization_id, now) do
-    PolicyOverride
-    |> Ash.Query.filter(organization_id == ^organization_id)
-    |> Ash.Query.filter(is_nil(starts_at) or starts_at <= ^now)
-    |> Ash.Query.filter(is_nil(expires_at) or expires_at > ^now)
-    |> Ash.read!(authorize?: false)
+    Domain.valid_policy_overrides!(organization_id, now, authorize?: false)
   end
 
   # --- decoding ------------------------------------------------------------------

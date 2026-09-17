@@ -10,11 +10,10 @@ defmodule AshCompliance.ProjectorDrainTest do
 
   use AshCompliance.DataCase, async: false
 
-  require Ash.Query
-
-  alias AshCompliance.Resources.{ComplianceEvaluation, Finding, PolicyBundle}
+  # Aliases for sandbox cleanup only (delete_all between tests on the shared
+  # projection tables); all data access goes through the domain interfaces.
+  alias AshCompliance.Resources.{ComplianceEvaluation, Finding}
   alias AshCompliance.Test.Projector, as: TestProjector
-  alias AshCompliance.Test.RuleSets.GlobalBaseline
   alias AshCompliance.Test.Support
   alias AshCompliance.TestRepo
 
@@ -125,7 +124,7 @@ defmodule AshCompliance.ProjectorDrainTest do
 
       # every finding and evaluation row is tagged with its own tenant, and no
       # evaluation from tenant A's bundle leaked into tenant B's rows
-      evaluations = ComplianceEvaluation |> Ash.read!(authorize?: false)
+      evaluations = AshCompliance.Domain.list_evaluations!(authorize?: false)
 
       assert %{
                ^org_a => 2,
@@ -161,12 +160,10 @@ defmodule AshCompliance.ProjectorDrainTest do
 
       AshCompliance.Testing.drain_sync(TestProjector, events)
 
-      require Ash.Query
-
       finding =
-        Finding
-        |> Ash.Query.filter(organization_id == ^org and subject_id == "cus_unknown")
-        |> Ash.read_one!(authorize?: false)
+        org
+        |> AshCompliance.Domain.findings_for_organization!(authorize?: false)
+        |> Enum.find(&(&1.subject_id == "cus_unknown"))
 
       assert finding.status == :unknown
       assert finding.breach_count == 0
@@ -245,8 +242,8 @@ defmodule AshCompliance.ProjectorDrainTest do
     :ok = AshCompliance.Testing.drain_sync(TestProjector, events)
 
     %{
-      findings: Finding |> Ash.read!(authorize?: false),
-      evaluations: ComplianceEvaluation |> Ash.read!(authorize?: false)
+      findings: AshCompliance.Domain.list_findings!(authorize?: false),
+      evaluations: AshCompliance.Domain.list_evaluations!(authorize?: false)
     }
   end
 
@@ -273,15 +270,11 @@ defmodule AshCompliance.ProjectorDrainTest do
   end
 
   defp findings_for(org) do
-    Finding
-    |> Ash.Query.filter(organization_id == ^org)
-    |> Ash.read!(authorize?: false)
+    AshCompliance.Domain.findings_for_organization!(org, authorize?: false)
   end
 
   defp evaluations_for(org) do
-    ComplianceEvaluation
-    |> Ash.Query.filter(organization_id == ^org)
-    |> Ash.read!(authorize?: false)
+    AshCompliance.Domain.evaluations_for_organization!(org, authorize?: false)
   end
 
   defp bundle_hashes_for(org) do
@@ -300,34 +293,33 @@ defmodule AshCompliance.ProjectorDrainTest do
     revision = Support.rule_set_revision(name: "rs-" <> Support.unique())
 
     revision
-    |> Ash.Changeset.for_update(:validate)
-    |> Ash.update!(authorize?: false)
-    |> Ash.Changeset.for_update(:approve)
-    |> Ash.update!(authorize?: false)
-    |> Ash.Changeset.for_update(:activate)
-    |> Ash.update!(authorize?: false)
+    |> AshCompliance.Domain.validate_rule_set_revision!(authorize?: false)
+    |> AshCompliance.Domain.approve_rule_set_revision!(authorize?: false)
+    |> AshCompliance.Domain.activate_rule_set_revision!(authorize?: false)
 
     if waiver do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      Ash.create!(AshCompliance.Resources.PolicyOverride, %{
-        organization_id: org,
-        kind: :waive,
-        rule_id: "kyc.review_required",
-        reason: "documented operational exception",
-        approver: "security-officer",
-        approved_at: now,
-        starts_at: now,
-        expires_at: DateTime.add(now, 24 * 3600, :second),
-        compensating_controls: ["manual-review"]
-      })
+      AshCompliance.Domain.create_policy_override!(
+        %{
+          organization_id: org,
+          kind: :waive,
+          rule_id: "kyc.review_required",
+          reason: "documented operational exception",
+          approver: "security-officer",
+          approved_at: now,
+          starts_at: now,
+          expires_at: DateTime.add(now, 24 * 3600, :second),
+          compensating_controls: ["manual-review"]
+        },
+        authorize?: false
+      )
     end
 
-    {:ok, bundle} = Ash.create(PolicyBundle, %{organization_id: org}, action: :compile)
+    {:ok, bundle} =
+      AshCompliance.Domain.compile_policy_bundle(%{organization_id: org}, authorize?: false)
 
-    bundle
-    |> Ash.Changeset.for_update(:activate)
-    |> Ash.update!(authorize?: false)
+    AshCompliance.Domain.activate_policy_bundle!(bundle, authorize?: false)
 
     bundle
   end

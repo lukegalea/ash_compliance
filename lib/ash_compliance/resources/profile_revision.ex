@@ -66,7 +66,14 @@ defmodule AshCompliance.Resources.ProfileRevision do
 
     read :latest_for_profile do
       argument(:profile_id, :uuid, allow_nil?: false)
+      get?(true)
       prepare(build(sort: [inserted_at: :desc], limit: 1))
+      filter(expr(profile_id == ^arg(:profile_id)))
+    end
+
+    read :for_profile do
+      argument(:profile_id, :uuid, allow_nil?: false)
+      prepare(build(sort: [inserted_at: :desc]))
       filter(expr(profile_id == ^arg(:profile_id)))
     end
   end

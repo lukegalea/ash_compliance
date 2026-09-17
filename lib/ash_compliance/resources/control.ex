@@ -49,5 +49,10 @@ defmodule AshCompliance.Resources.Control do
       filter(expr(is_nil(organization_id) or organization_id == ^arg(:organization_id)))
       filter(expr(control_id == ^arg(:control_id)))
     end
+
+    read :for_catalog do
+      argument(:catalog_id, :uuid, allow_nil?: false)
+      filter(expr(catalog_id == ^arg(:catalog_id)))
+    end
   end
 end

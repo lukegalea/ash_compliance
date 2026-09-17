@@ -45,6 +45,7 @@ defmodule AshCompliance.Resources.CatalogVersion do
 
     read :latest_for_catalog do
       argument(:catalog_id, :uuid, allow_nil?: false)
+      get?(true)
 
       prepare(build(sort: [inserted_at: :desc], limit: 1))
       filter(expr(catalog_id == ^arg(:catalog_id)))
