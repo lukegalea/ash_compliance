@@ -84,10 +84,20 @@ defmodule AshCompliance.MixProject do
       {:postgrex, ">= 0.0.0"},
       # Canonical JSON for content hashes.
       {:jason, "~> 1.2"},
+      # The ruleset editor LiveView. A hard dependency rather than optional,
+      # the same way ash_decisions declares its editor: the editor is half of
+      # what this package is for, and an optional dependency that the shipped
+      # module needs anyway buys a compile-time failure instead of a
+      # resolvable one.
+      {:phoenix_live_view, "~> 1.0"},
       # Dev / test
       {:oban, "~> 2.18", only: [:dev, :test]},
       {:stream_data, "~> 1.1"},
       {:simple_sat, "~> 0.1", only: [:dev, :test]},
+      # LiveView tests need an HTML query engine. `lazy_html` rather than
+      # floki because it is what phoenix_live_view 1.x selects against; the
+      # same declaration ash_decisions makes for the same reason.
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

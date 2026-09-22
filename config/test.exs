@@ -41,4 +41,15 @@ config :ash, disable_async?: true
 config :ash, :validate_domain_resource_inclusion?, false
 config :ash, :validate_domain_config_inclusion?, false
 
+# The web test endpoint (test/support/web_endpoint.ex). Config lives here
+# rather than in a compile-time Application.put_env in the module body, as
+# ash_decisions' test endpoint notes: the put_env trick only runs on a fresh
+# compilation and is silently absent from cached beams.
+config :ash_compliance, AshCompliance.Web.TestEndpoint,
+  server: false,
+  pubsub_server: AshCompliance.TestPubSub,
+  secret_key_base: String.duplicate("a", 64),
+  live_view: [signing_salt: String.duplicate("b", 32)],
+  render_errors: [formats: [html: {AshCompliance.Web.ErrorView, :render, []}], layout: false]
+
 config :logger, level: :warning

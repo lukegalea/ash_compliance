@@ -94,6 +94,13 @@ defmodule AshCompliance.Domain do
         action: :active_for_organization,
         args: [:organization_id]
       )
+
+      # Every revision for the organization, any status — the editor's
+      # rule-set list, which must show drafts, not just what is live.
+      define(:rule_set_revisions_for_organization,
+        action: :for_organization,
+        args: [:organization_id]
+      )
     end
 
     resource(AshCompliance.Resources.PolicyBundle) do
@@ -105,6 +112,14 @@ defmodule AshCompliance.Domain do
       # Absence is meaningful: no active bundle yet reads as nil.
       define(:active_policy_bundle,
         action: :active_for_organization,
+        args: [:organization_id],
+        not_found_error?: false
+      )
+
+      # The most recent bundle regardless of status, so an operator who
+      # reopens the editor between compile and activate can still resume.
+      define(:latest_policy_bundle,
+        action: :latest_for_organization,
         args: [:organization_id],
         not_found_error?: false
       )

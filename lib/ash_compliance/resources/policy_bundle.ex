@@ -102,6 +102,16 @@ defmodule AshCompliance.Resources.PolicyBundle do
       filter(expr(organization_id == ^arg(:organization_id) and status == :active))
     end
 
+    # The most recent bundle regardless of status: the editor's compile →
+    # activate flow resumes from it after a reload, when the compiled bundle
+    # is no longer in memory and the active read comes back nil.
+    read :latest_for_organization do
+      argument(:organization_id, :uuid, allow_nil?: false)
+      get?(true)
+      prepare(build(sort: [inserted_at: :desc], limit: 1))
+      filter(expr(organization_id == ^arg(:organization_id)))
+    end
+
     read :decoded do
       argument(:id, :uuid, allow_nil?: false)
       get_by([:id])

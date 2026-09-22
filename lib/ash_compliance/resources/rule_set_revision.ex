@@ -173,5 +173,13 @@ defmodule AshCompliance.Resources.RuleSetRevision do
         )
       )
     end
+
+    read :for_organization do
+      argument(:organization_id, :uuid, allow_nil?: false)
+
+      prepare(build(sort: [inserted_at: :desc]))
+
+      filter(expr(organization_id == ^arg(:organization_id)))
+    end
   end
 end

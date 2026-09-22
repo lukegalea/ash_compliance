@@ -127,6 +127,75 @@ defmodule AshCompliance.Test.RuleSets.GlobalNonWaivable do
   end
 end
 
+defmodule AshCompliance.Test.RuleSets.EditorRoundTrip do
+  @moduledoc false
+
+  # Exercises everything the ruleset editor edits, so the encode → decode
+  # round-trip test proves the editing model is lossless: facts of several
+  # types with one_of and all three missing semantics, rules with variable
+  # and ground subjects, has/neg triples, a gap text, and a non-default
+  # combining algorithm.
+
+  use AshRules
+
+  combining(:permit_overrides)
+
+  fact_schema do
+    fact(:status, :atom, one_of: [:active, :suspended], description: "lifecycle state")
+    fact(:jurisdiction, :atom)
+    fact(:has_valid_kyc, :boolean, missing: :unknown)
+    fact(:reviewed, :boolean, missing: :no_fact)
+    fact(:notes, :string)
+    fact(:balance, :integer)
+    fact(:ratio, :float)
+    fact(:opened_on, :date)
+    fact(:owner, :atom)
+  end
+
+  rule "active regulated customer requires valid KYC",
+    id: "kyc.valid_required",
+    severity: :medium,
+    message: "customer %{customer} requires valid KYC",
+    controls: ["kyc-1"],
+    evidence: ["kyc-evidence"] do
+    when_requires(
+      has(:customer, :status, :active),
+      has(:customer, :jurisdiction, :regulated)
+    )
+
+    fails_when(neg(:customer, :has_valid_kyc, true))
+    outcome(:noncompliant, gap: "kyc.valid_required")
+  end
+
+  rule "suspended customers carry no balance",
+    id: "acct.balance_frozen",
+    severity: :high,
+    message: "account %{account} holds a balance while suspended" do
+    when_requires(
+      has(:customer, :status, :suspended),
+      has(var(:account), :owner, :customer)
+    )
+
+    fails_when(neg(var(:account), :balance, 0))
+    outcome(:noncompliant, gap: "acct.balance")
+  end
+
+  rule "active customers carry a note and an opening date",
+    id: "kyc.notes_and_dates",
+    severity: :low,
+    remediation_ref: "kyc-remediation-3" do
+    when_requires(
+      has(:customer, :status, :active),
+      has(:customer, :notes, " reviewed "),
+      has(:customer, :ratio, 1.5),
+      has(:customer, :opened_on, ~D[2020-01-01])
+    )
+
+    fails_when(neg(:customer, :reviewed, true))
+    outcome(:noncompliant, gap: "kyc.notes")
+  end
+end
+
 defmodule AshCompliance.Test.Support do
   @moduledoc false
 

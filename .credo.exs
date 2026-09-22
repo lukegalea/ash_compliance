@@ -122,6 +122,11 @@
         {Credo.Check.Refactor.CondStatements, []},
         {Credo.Check.Refactor.CyclomaticComplexity, false},
         {Credo.Check.Refactor.FunctionArity, []},
+        # The ruleset editor's toolbar calls the host domain's code
+        # interfaces by name at runtime: the domain is a mount option of the
+        # injected LiveView, not a compile-time alias, so `apply/3` is the
+        # mechanism, not a refactor away.
+        {Credo.Check.Refactor.Apply, false},
         # The library's public API *is* `use` macros: each one instantiates a
         # whole Ash resource or LiveView into the host's namespace, so the
         # quote block is necessarily the size of the thing being generated.

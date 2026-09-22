@@ -34,6 +34,15 @@ Nothing has been released yet. Everything below is the initial body of work.
 
 ### Features:
 
+- `AshCompliance.Web.RulesetEditorLive`: the operator-facing ruleset editor.
+  Hosts mount it with the `use` macro (domain, organization source, actor),
+  exactly as `ash_decisions` mounts its designer. A structured form over
+  facts and rules — no raw DSL text — that serializes through
+  `AshRules.Ir.encode!` on every save and hydrates through
+  `AshRules.Ir.decode`, with the verifier's diagnostics rendered inline and
+  the toolbar wired 1:1 to the domain lifecycle (draft → validate → approve
+  → activate → compile bundle → activate bundle). `phoenix_live_view`
+  becomes a hard dependency for the same reason ash_decisions declares it.
 - Control plane: catalogs, controls, profiles (tailoring operations as data),
   rule set revisions with a validated lifecycle, tenant policy sets,
   accountability-bearing policy overrides (waivers with bounded time,
