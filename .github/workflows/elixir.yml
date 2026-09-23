@@ -50,6 +50,15 @@ jobs:
           otp-version: "28"
       # The devenv Postgres this repo develops against listens on 5435; the
       # CI service container is on the default 5432.
+      # This repo is private and so is its ash_rules git dep: fetch both with
+      # the PAT until (if ever) they go public.
+      - name: Give mix access to private git deps
+        env:
+          PRIVATE_DEPS_TOKEN: ${{ secrets.PRIVATE_DEPS_TOKEN }}
+        run: |
+          if [ -n "$PRIVATE_DEPS_TOKEN" ]; then
+            git config --global url."https://x-access-token:${PRIVATE_DEPS_TOKEN}@github.com/".insteadOf "https://github.com/"
+          fi
       - run: mix deps.get
       - run: mix test
         env:
@@ -65,6 +74,15 @@ jobs:
         with:
           elixir-version: "1.18"
           otp-version: "28"
+      # This repo is private and so is its ash_rules git dep: fetch both with
+      # the PAT until (if ever) they go public.
+      - name: Give mix access to private git deps
+        env:
+          PRIVATE_DEPS_TOKEN: ${{ secrets.PRIVATE_DEPS_TOKEN }}
+        run: |
+          if [ -n "$PRIVATE_DEPS_TOKEN" ]; then
+            git config --global url."https://x-access-token:${PRIVATE_DEPS_TOKEN}@github.com/".insteadOf "https://github.com/"
+          fi
       - run: mix deps.get
       - run: mix compile --force --warnings-as-errors
 
@@ -77,6 +95,15 @@ jobs:
         with:
           elixir-version: "1.18"
           otp-version: "28"
+      # This repo is private and so is its ash_rules git dep: fetch both with
+      # the PAT until (if ever) they go public.
+      - name: Give mix access to private git deps
+        env:
+          PRIVATE_DEPS_TOKEN: ${{ secrets.PRIVATE_DEPS_TOKEN }}
+        run: |
+          if [ -n "$PRIVATE_DEPS_TOKEN" ]; then
+            git config --global url."https://x-access-token:${PRIVATE_DEPS_TOKEN}@github.com/".insteadOf "https://github.com/"
+          fi
       - run: mix deps.get
       - run: mix format --check-formatted
 
@@ -89,5 +116,14 @@ jobs:
         with:
           elixir-version: "1.18"
           otp-version: "28"
+      # This repo is private and so is its ash_rules git dep: fetch both with
+      # the PAT until (if ever) they go public.
+      - name: Give mix access to private git deps
+        env:
+          PRIVATE_DEPS_TOKEN: ${{ secrets.PRIVATE_DEPS_TOKEN }}
+        run: |
+          if [ -n "$PRIVATE_DEPS_TOKEN" ]; then
+            git config --global url."https://x-access-token:${PRIVATE_DEPS_TOKEN}@github.com/".insteadOf "https://github.com/"
+          fi
       - run: mix deps.get
       - run: mix credo --strict
