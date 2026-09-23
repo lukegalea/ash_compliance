@@ -196,6 +196,59 @@ defmodule AshCompliance.Test.RuleSets.EditorRoundTrip do
   end
 end
 
+defmodule AshCompliance.Test.RuleSets.AppointmentRules do
+  @moduledoc """
+  The appointment-shaped rule set the status query's weight story runs
+  against: the same three-rule shape the clinic-demo bundle uses — a check-in
+  weight gate (high), completion triage (high), completion notes (medium).
+  """
+
+  use AshRules
+
+  combining(:deny_overrides)
+
+  fact_schema do
+    fact(:transition_to, :atom,
+      one_of: [:checked_in, :completed, :cancelled, :no_show],
+      description: "The state-machine transition being attempted"
+    )
+
+    fact(:patient_weight_recorded, :boolean,
+      description: "Whether the patient has a weight on record"
+    )
+
+    fact(:has_triage_urgency, :boolean,
+      description: "Whether the triage decision has answered for this appointment"
+    )
+
+    fact(:has_notes, :boolean, description: "Whether consult notes are present")
+  end
+
+  rule "check-in requires a recorded weight",
+    id: "appt.checkin_requires_weight",
+    severity: :high do
+    when_requires(has(:appointment, :transition_to, :checked_in))
+    fails_when(neg(:appointment, :patient_weight_recorded, true))
+    outcome(:noncompliant, gap: "record the patient's weight before check-in")
+  end
+
+  rule "completion requires triage urgency",
+    id: "appt.complete_requires_triage",
+    severity: :high do
+    when_requires(has(:appointment, :transition_to, :completed))
+    fails_when(neg(:appointment, :has_triage_urgency, true))
+    outcome(:noncompliant, gap: "triage urgency missing")
+  end
+
+  rule "completion requires notes",
+    id: "appt.complete_requires_notes",
+    severity: :medium do
+    when_requires(has(:appointment, :transition_to, :completed))
+    fails_when(neg(:appointment, :has_notes, true))
+    outcome(:noncompliant, gap: "consult notes required")
+  end
+end
+
 defmodule AshCompliance.Test.Support do
   @moduledoc false
 

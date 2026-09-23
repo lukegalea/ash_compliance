@@ -61,4 +61,22 @@ defmodule AshCompliance do
   def projectors do
     Application.get_env(:ash_compliance, :projectors, [])
   end
+
+  @doc """
+  Record-level compliance status: is this record compliant under the
+  organization's active rule bundle?
+
+  Read-only — the same bundle evaluation the guard path exercises, surfaced
+  instead of enforced: per-rule verdicts (compliant / noncompliant /
+  not_applicable, with the rule id, severity and gap text the guard quotes on
+  refusals) under an overall status. Writes nothing.
+
+  Options and the return contract are documented on
+  `AshCompliance.Status.for/2`; the facts come from the host through the
+  `AshCompliance.FactBuilder` contract.
+  """
+  @spec status_for(term(), keyword()) :: {:ok, AshCompliance.Status.t()} | {:error, term()}
+  def status_for(record, opts \\ []) do
+    AshCompliance.Status.for(record, opts)
+  end
 end

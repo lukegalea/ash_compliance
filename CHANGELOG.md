@@ -34,6 +34,15 @@ Nothing has been released yet. Everything below is the initial body of work.
 
 ### Features:
 
+- `AshCompliance.status_for/2`: record-level compliance status as a read-only
+  query — the same bundle evaluation the guard path exercises, surfaced for
+  display instead of enforced. Returns per-rule verdicts (compliant /
+  noncompliant / not_applicable, each with the rule id, severity and gap text
+  the guard quotes on refusals) under an overall status, plus `message/1`
+  rendering the guard's refusal vocabulary directly. Facts come from the host
+  through the `AshCompliance.FactBuilder` contract (module, `{module,
+  function}`, capture, or the record's own module); `:organization` accepts
+  the established MFA form.
 - `AshCompliance.Web.RulesetEditorLive`: the operator-facing ruleset editor.
   Hosts mount it with the `use` macro (domain, organization source, actor),
   exactly as `ash_decisions` mounts its designer. A structured form over

@@ -131,6 +131,10 @@ defmodule AshCompliance.MixProject do
           AshCompliance.Resources.ComplianceEvaluation,
           AshCompliance.Resources.EvidenceArtifact
         ],
+        "Status queries": [
+          AshCompliance.Status,
+          AshCompliance.FactBuilder
+        ],
         Interop: [AshCompliance.Oscal, AshCompliance.Workers.NotifyProjectors],
         Internals: ~r/.*/
       ]
