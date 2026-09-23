@@ -268,14 +268,68 @@ defmodule AshCompliance.Web.RulesetEditorLive do
 
   # ── Rendering ─────────────────────────────────────────────────────────────
 
-  # Plain semantic HTML on purpose: no framework classes, no stylesheet. The
-  # host owns the design system — ids and data-* attributes are the styling
-  # contract.
+  # Semantic HTML on purpose: the structure, ids and data-* attributes are
+  # the host's styling contract. The scoped <style> below is a token-driven
+  # DEFAULT skin, not the design: every value rides the --a2ui-* vocabulary
+  # hosts already define (the ash_a2ui web components), with honest
+  # neobrutalist fallbacks where a host defines none. A host that styles the
+  # ids directly owns the look; the skin never reaches outside this root.
 
   @doc false
   def __render__(assigns) do
     ~H"""
     <div id="ruleset-editor-live" data-organization-id={@organization_id}>
+      <style id="ruleset-editor-skin">
+        #ruleset-editor-live button {
+          display: inline-flex; align-items: center; gap: 0.375rem;
+          font: inherit; font-size: var(--a2ui-font-size-s, 0.75rem); font-weight: 600;
+          padding: var(--a2ui-button-padding, 0.3rem 0.8rem); cursor: pointer;
+          background: var(--a2ui-button-background, var(--a2ui-color-surface, #fff));
+          color: var(--a2ui-color-on-surface, inherit);
+          border: var(--a2ui-border-width, 2px) solid
+            var(--a2ui-button-border, var(--a2ui-color-border, #141414));
+          border-radius: var(--a2ui-border-radius, 0.375rem);
+          box-shadow: 2px 2px 0 0 var(--a2ui-color-border, #141414);
+          transition: transform 80ms ease, box-shadow 80ms ease;
+        }
+        #ruleset-editor-live button:hover {
+          transform: translate(-1px, -1px);
+          box-shadow: 3px 3px 0 0 var(--a2ui-color-border, #141414);
+        }
+        #ruleset-editor-live button:active {
+          transform: translate(1px, 1px);
+          box-shadow: 1px 1px 0 0 var(--a2ui-color-border, #141414);
+        }
+        #ruleset-editor-live #lifecycle-toolbar button {
+          background: var(--a2ui-color-primary, #2563eb);
+          color: var(--a2ui-color-on-primary, #fff);
+        }
+        #ruleset-editor-live input:not([type="hidden"]),
+        #ruleset-editor-live select {
+          font: inherit; font-size: var(--a2ui-font-size-s, 0.75rem);
+          padding: 0.3rem 0.5rem;
+          background: var(--a2ui-color-input, #fff);
+          color: var(--a2ui-color-on-input, inherit);
+          border: var(--a2ui-border-width, 2px) solid var(--a2ui-color-border, #141414);
+          border-radius: var(--a2ui-border-radius, 0.375rem);
+        }
+        #ruleset-editor-live fieldset {
+          border: var(--a2ui-border-width, 2px) solid var(--a2ui-color-border, #141414);
+          border-radius: var(--a2ui-border-radius, 0.375rem);
+          margin: 0 0 1rem;
+        }
+        #ruleset-editor-live table { border-collapse: collapse; margin: 0 0 0.75rem; }
+        #ruleset-editor-live th,
+        #ruleset-editor-live td {
+          border: 1px solid var(--a2ui-color-border, #141414);
+          padding: 0.25rem 0.5rem; text-align: left;
+          font-size: var(--a2ui-font-size-s, 0.75rem);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          #ruleset-editor-live button { transition: none !important; }
+          #ruleset-editor-live button:hover { transform: none; }
+        }
+      </style>
       <header id="ruleset-editor-header">
         <h1>Rule sets</h1>
         <p id="active-bundle" :if={@active_bundle} data-content-hash={@active_bundle.content_hash}>
