@@ -5,7 +5,7 @@
 # ash-project workflow cannot go green here (its code-scanning upload requires
 # GitHub Advanced Security), so the needed subset is declared directly.
 #
-# The tests run against a real Postgres 16 with the `uuid-ossp`, `citext` and
+# The tests run against a real Postgres 18 with the `uuid-ossp`, `citext` and
 # (optionally) `ash_functions` extensions available. The suite's migrations
 # install what they need; see config/test.exs for the connection env vars.
 
@@ -29,8 +29,12 @@ jobs:
     name: mix test
     runs-on: ubuntu-latest
     services:
+      # pg18: the repo's `min_pg_version/0` is 18 (Phase 0, temporal-resources
+      # readiness) -- the migrations use PostgreSQL 18 features (native
+      # uuidv7(), which pg17 and earlier lack), so the service must be at
+      # least 18 too.
       postgres:
-        image: postgres:16
+        image: postgres:18-alpine
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           TZ: UTC

@@ -287,7 +287,8 @@ defmodule AshCompliance.Compiler do
     end
   end
 
-  defp layer_name(nil), do: "unknown"
+  # The cond above refuses on `is_nil(winner)` before this is reached, so no
+  # nil clause is needed (a dead one warns under --warnings-as-errors).
   defp layer_name(contribution), do: inspect(contribution.layer)
 
   # --- profile operations ---------------------------------------------------------

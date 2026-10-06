@@ -47,6 +47,26 @@ CI runs `mix compile --warnings-as-errors`, `mix test`,
 `mix format --check-formatted`, and `mix credo --strict`. Run all four before
 you finish.
 
+## Development environment
+
+This repository has no devenv of its own. It borrows the shared `ash_enterprise`
+devenv (Postgres + toolchain), which runs **PostgreSQL 18** (Phase 0 baseline;
+the repo's `min_pg_version/0` is 18 and CI's service image is `postgres:18-alpine`
+in lockstep). The devenv's Postgres listens on 127.0.0.1 on a port that shifts
+with machine state (5436 at time of writing; 5435 in older notes) — the devenv's
+`enterShell` exports the real `PGPORT`, so always run the suite through the
+devenv shell rather than assuming a port:
+
+```bash
+cd /home/lukegalea/ash_enterprise && devenv shell -- \
+  bash -c 'cd /home/lukegalea/ast-forks/ash_compliance && mix test'
+```
+
+The suite needs a PostgreSQL for the `:db`-tagged tests (env vars `DB_USER`,
+`DB_PASSWORD`, `DB_HOST`/`PGHOST`, `PGPORT`; the test helper creates and
+migrates its database itself, so no setup task or seed step exists).
+`SKIP_DB=1 mix test` excludes them.
+
 ## Generated sections
 
 This repository does not run `mix usage_rules.sync` today. If it starts to, the
