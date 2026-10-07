@@ -74,8 +74,11 @@ defmodule AshCompliance.MixProject do
       {:ash_rules, github: "lukegalea/ash_rules"},
       # Control plane storage. Resources resolve their repo through
       # application env (:ash_compliance, :repo), so hosts wire their own.
-      {:ash, "~> 3.5"},
-      {:ash_postgres, "~> 2.0"},
+      # 3.34+/2.14+ is the temporal-resources floor (Phase 3): the
+      # PolicyOverride waiver surface uses the `temporal` DSL (ash) and the
+      # WITHOUT OVERLAPS period keys (ash_postgres, PostgreSQL 18).
+      {:ash, "~> 3.34"},
+      {:ash_postgres, "~> 2.14"},
       {:spark, "~> 2.0", runtime: false},
       # The event log and the projector engine the ComplianceProjector runs on.
       {:ash_events, "~> 0.7.0"},

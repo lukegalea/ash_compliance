@@ -44,10 +44,24 @@ inheritance is refused by construction.
 
 ## Waivers and time
 
-Waivers are evaluated against the *compile clock*. A waiver is valid while
-`starts_at <= now < expires_at`; expired waivers are excluded from resolution
-entirely, which means a waiver lapsing returns its rule to the effective
-bundle on the next compile — no action required, no forgetting.
+Waivers are evaluated against the *compile clock*. A waiver is in force while
+its period contains the pinned instant — the half-open window
+`starts_at <= now < expires_at`, stored as a PostgreSQL 18 temporal period on
+the resource (Phase 3) and answered by the database, not by a hand-rolled
+filter. Expired waivers are excluded from resolution entirely, which means a
+waiver lapsing returns its rule to the effective bundle on the next compile —
+no action required, no forgetting.
+
+Because the in-force window is the resource's temporal period, two more
+properties hold by construction:
+
+* **Non-overlap is DB-enforced** — one waiver per (organization, rule,
+  subject scope) may be in force at any instant; a second, overlapping
+  grant is rejected by the database's `WITHOUT OVERLAPS` exclusion (the
+  double-granted waiver is impossible).
+* **Waivers can be future-dated** — a grant whose `starts_at` is in the
+  future is invisible to compiles until that instant arrives; the write
+  itself opens the future period, no scheduler involved.
 
 Subject-scoped waivers exist as data (`scope_subject_type` / `scope_subject_id`)
 but v1 compiles organization-wide bundles only; scoping a waiver to a single

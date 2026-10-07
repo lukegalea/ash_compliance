@@ -14,6 +14,21 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 Nothing has been released yet. Everything below is the initial body of work.
 
+### Changed:
+
+- **Phase 3 (temporal waivers)**: `PolicyOverride` is now a temporal resource
+  (`strategy :context`, period attribute `valid_at`) — the in-force window IS
+  the period. The stored `starts_at`/`expires_at` columns are replaced by the
+  period (the names survive as derived calculations over `valid_at`); waiver
+  grants map the `starts_at`/`expires_at` action arguments onto it, so expiry
+  is physical (no version exists past `expires_at`) and future-dated waivers
+  work with no scheduler. The `one_in_force_per_scope` identity is emitted as
+  a `UNIQUE (... WITHOUT OVERLAPS)` GiST exclusion: one waiver per
+  (organization, rule, subject scope) at any instant — the double-granted
+  waiver is now rejected by the database. Requires `ash >= 3.34` and
+  `ash_postgres >= 2.14` (the temporal core) on PostgreSQL 18.
+- Dependency floors raised accordingly: `ash ~> 3.34`, `ash_postgres ~> 2.14`.
+
 ### Documentation:
 
 - README: the "how it fits" control-plane/data-plane diagram, and screenshots
