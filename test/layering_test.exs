@@ -308,6 +308,13 @@ defmodule AshCompliance.LayeringTest do
   end
 
   defp replace(rule_id, json) do
+    # Phase 3 (temporal waivers): the in-force window is the period, and a
+    # grant's period opens at its write instant. The fixture compiles at the
+    # pinned @now, so the undated replacement is written AS OF that pinned
+    # instant — without it the grant would open [real-now, ∞) and be
+    # invisible to a compile clock set in its past. The assertions are
+    # unchanged; this is the pinned-instant port of the old "nil starts_at
+    # means always in force" convention.
     AshCompliance.Domain.create_policy_override!(
       %{
         organization_id: @org,
@@ -319,6 +326,7 @@ defmodule AshCompliance.LayeringTest do
         replacement_rules_json: json,
         compensating_controls: []
       },
+      as_of: @now,
       authorize?: false
     )
   end
