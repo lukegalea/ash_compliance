@@ -95,3 +95,17 @@ jobs:
           otp-version: "28"
       - run: mix deps.get
       - run: mix credo --strict
+
+  # Hex's own advisory check: fails on any locked package that Hex marks as
+  # retired or as carrying a security advisory (SDLC-96).
+  hex-audit:
+    name: mix hex.audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "28"
+      - run: mix deps.get
+      - run: mix hex.audit
