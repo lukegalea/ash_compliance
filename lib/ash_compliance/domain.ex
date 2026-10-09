@@ -32,6 +32,14 @@ defmodule AshCompliance.Domain do
       define(:create_catalog, action: :create)
       define(:get_catalog_by_id, action: :read, get_by: [:id])
       define(:catalogs_for_organization, action: :for_organization, args: [:organization_id])
+
+      # The re-import identity lookup (import discipline): the catalog a
+      # same-named import would collide with, or nil. Absence is meaningful.
+      define(:catalog_by_organization_and_name,
+        action: :by_organization_and_name,
+        args: [:organization_id, :name],
+        not_found_error?: false
+      )
     end
 
     resource(AshCompliance.Resources.CatalogVersion) do
@@ -60,6 +68,10 @@ defmodule AshCompliance.Domain do
       define(:get_control_revision_by_id, action: :read, get_by: [:id])
 
       define(:active_control_revisions, action: :active_for_control, args: [:control_id])
+
+      # Every revision of a control, any status — the import discipline's
+      # per-control ruling surface.
+      define(:control_revisions_for_control, action: :revisions_for_control, args: [:control_id])
     end
 
     resource(AshCompliance.Resources.Profile) do

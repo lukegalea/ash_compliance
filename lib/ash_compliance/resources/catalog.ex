@@ -44,6 +44,23 @@ defmodule AshCompliance.Resources.Catalog do
       get_by([:id])
     end
 
+    read :by_organization_and_name do
+      argument(:organization_id, :uuid)
+      argument(:name, :string, allow_nil?: false)
+      get?(true)
+
+      # The re-import identity lookup: the same (organization_id, name)
+      # pair the unique_name_per_org index enforces. nil matches nil —
+      # an import without an organization targets the shared namespace.
+      filter(
+        expr(
+          name == ^arg(:name) and
+            (organization_id == ^arg(:organization_id) or
+               (is_nil(organization_id) and is_nil(^arg(:organization_id))))
+        )
+      )
+    end
+
     read :for_organization do
       argument(:organization_id, :uuid)
       filter(expr(is_nil(organization_id) or organization_id == ^arg(:organization_id)))

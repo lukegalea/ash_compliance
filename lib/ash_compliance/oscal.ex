@@ -7,10 +7,10 @@ defmodule AshCompliance.Oscal do
 
   The boundary preserves what OSCAL carries — identifiers, parameters,
   provenance, revision lineage — while the internal model stays relational:
-  catalogs/controls/profiles with immutable revision rows. Import is
-  idempotent per content hash (re-importing the same document is a no-op for
-  versions, and updates nothing else), and export reconstructs a document
-  faithful to the identifiers that went in.
+  catalogs/controls/profiles with immutable revision rows. Imports are
+  identity- and content-aware: re-importing the same document is a no-op;
+  a changed document opens a new version and withdraws the predecessors
+  it supersedes (see `import_catalog/2`).
 
   v1 scope: **catalogs and profiles only** (component definitions and
   assessment plans are out).
@@ -68,7 +68,45 @@ defmodule AshCompliance.Oscal do
     ]
   end
 
-  @doc "Imports an OSCAL catalog document (map or JSON string). Returns the created catalog."
+  @doc """
+  Imports an OSCAL catalog document (map or JSON string). Returns the
+  created catalog.
+
+  ## Import discipline (re-import semantics)
+
+  Imports are identity-aware: a document whose `(organization_id, name)`
+  matches an existing catalog is a **re-import**, resolved by content:
+
+    * **Same content as the catalog's latest version** → **no-op**: the
+      existing catalog is returned unchanged, nothing is written. This is
+      the idempotence this module has always claimed.
+    * **Different content** → a **new version on the same catalog row**:
+      a new `CatalogVersion` is pinned, and the controls are ruled
+      **per-control** (see `import_controls/6`): unchanged controls are
+      skipped, changed controls get their predecessors **withdrawn at the
+      import instant** (a period-split write — the predecessor's active
+      history stays readable as-of before the instant) and a new active
+      revision at that same instant, and changed content under a version
+      string the control already uses is refused. The multi-active drift
+      — repeated imports leaving several active revisions per control —
+      is killed at its source. A catalog version string that already
+      exists with different content is likewise refused: a re-import must
+      carry a new `metadata.version`.
+    * **No matching catalog** → fresh import, as always.
+
+  The `:published_at` option declares the **publication instant** for the
+  whole import (a historical import lands at its true publication time):
+  it pins the catalog version's period lower bound and the control
+  revisions' creation instants, and the predecessor withdrawal splits at
+  the same instant, so the history stays coherent. Absent, everything
+  lands at wall-now.
+
+  Withdraw-then-create is sequential per control and the import is not
+  wrapped in one transaction (pre-existing behavior): a failure partway
+  leaves the controls imported so far — with predecessors correctly
+  withdrawn at the same instant, so no multi-active state is possible
+  even mid-import.
+  """
   @spec import_catalog(map() | String.t(), keyword()) ::
           {:ok, Catalog.t()} | {:error, String.t() | [String.t()]}
   def import_catalog(json, opts \\ [])
@@ -82,66 +120,239 @@ defmodule AshCompliance.Oscal do
 
   def import_catalog(document, opts) when is_map(document) do
     organization_id = Keyword.get(opts, :organization_id)
+    instant = Keyword.get(opts, :published_at) || now()
     opts = call_opts(opts)
 
     with {:ok, metadata} <- fetch_metadata(document),
          {:ok, controls} <- flatten_controls(document) do
       content_hash = hash_document(%{"controls" => controls})
 
-      {:ok, catalog} =
-        Domain.create_catalog(
-          %{
-            organization_id: organization_id,
-            name: metadata.title,
-            description: metadata.description,
-            oscal_uuid: document["uuid"]
-          },
-          opts
-        )
+      case Domain.catalog_by_organization_and_name(organization_id, metadata.title, opts) do
+        {:ok, nil} ->
+          with {:ok, catalog} <-
+                 Domain.create_catalog(
+                   %{
+                     organization_id: organization_id,
+                     name: metadata.title,
+                     description: metadata.description,
+                     oscal_uuid: document["uuid"]
+                   },
+                   opts
+                 ),
+               {:ok, _version} <-
+                 Domain.create_catalog_version(
+                   %{
+                     catalog_id: catalog.id,
+                     version: metadata.version,
+                     source: metadata.source,
+                     content_hash: content_hash,
+                     published_at: instant
+                   },
+                   opts
+                 ),
+               :ok <-
+                 import_controls(organization_id, catalog.id, controls, metadata, instant, opts) do
+            {:ok, catalog}
+          end
 
-      {:ok, _version} =
-        Domain.create_catalog_version(
-          %{
-            catalog_id: catalog.id,
-            version: metadata.version,
-            source: metadata.source,
-            content_hash: content_hash,
-            published_at: now()
-          },
-          opts
-        )
+        {:ok, catalog} ->
+          reimport_catalog(catalog, metadata, controls, content_hash, instant, opts)
 
-      Enum.each(controls, fn control ->
-        control_id = control["id"]
-
-        {:ok, control_record} =
-          Domain.create_control(
-            %{
-              organization_id: organization_id,
-              catalog_id: catalog.id,
-              control_id: control_id,
-              title: control["title"],
-              family: control["family"] || group_family(document, control_id)
-            },
-            opts
-          )
-
-        {:ok, _revision} =
-          Domain.create_control_revision(
-            %{
-              control_id: control_record.id,
-              version: control["version"] || metadata.version,
-              statement: control["statement"] || control["title"],
-              params: control["params"] || [],
-              citations: control["citations"] || [],
-              status: :active
-            },
-            opts
-          )
-      end)
-
-      {:ok, catalog}
+        {:error, error} ->
+          {:error, error}
+      end
     end
+  end
+
+  # The re-import path: new version on the same catalog row, predecessors
+  # withdrawn at the import instant. Same content is a no-op (ruled before
+  # this runs).
+  defp reimport_catalog(catalog, metadata, controls, content_hash, instant, opts) do
+    latest = Domain.latest_catalog_version!(catalog.id, opts)
+
+    if latest && latest.content_hash == content_hash do
+      # Same-content re-import: idempotent no-op.
+      {:ok, catalog}
+    else
+      with {:ok, _version} <-
+             create_version_on_conflict(catalog.id, metadata, content_hash, instant, opts),
+           :ok <-
+             import_controls(
+               catalog.organization_id,
+               catalog.id,
+               controls,
+               metadata,
+               instant,
+               opts
+             ) do
+        {:ok, catalog}
+      end
+    end
+  end
+
+  defp create_version_on_conflict(catalog_id, metadata, content_hash, instant, opts) do
+    case Domain.create_catalog_version(
+           %{
+             catalog_id: catalog_id,
+             version: metadata.version,
+             source: metadata.source,
+             content_hash: content_hash,
+             published_at: instant
+           },
+           opts
+         ) do
+      {:ok, version} ->
+        {:ok, version}
+
+      {:error, %Ash.Error.Invalid{} = error} ->
+        if Enum.any?(error.errors, &(&1.message =~ "has already been taken")) do
+          {:error,
+           "catalog version #{inspect(metadata.version)} already exists for this catalog " <>
+             "with different content — a re-import must carry a new metadata.version"}
+        else
+          {:error, error}
+        end
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  # Imports (or re-imports) the document's controls onto the catalog, one
+  # ruling per control (the import discipline):
+  #
+  #   * Unchanged content → skipped: no withdrawal, no new period. A
+  #     re-import that changed one control does not churn the others.
+  #   * Changed content under a version string the control already uses →
+  #     refused, before anything is written for that control: a re-import
+  #     must carry a new control version.
+  #   * Changed content under a new version string → the predecessors are
+  #     withdrawn at the import instant (every active, draining any
+  #     pre-discipline multi-active drift) and the new active revision is
+  #     created at that same instant — adjacent periods, no multi-active
+  #     state.
+  #   * New control → created directly active, as always.
+  #
+  # Because the refusals pre-check before any withdrawal, a control can
+  # never be left withdrawn-with-no-successor.
+  defp import_controls(organization_id, catalog_id, controls, metadata, instant, opts) do
+    existing_controls =
+      if catalog_id do
+        Domain.controls_for_catalog!(catalog_id, opts)
+      else
+        []
+      end
+
+    Enum.reduce_while(controls, :ok, fn control, :ok ->
+      control_id = control["id"]
+      existing = Enum.find(existing_controls, &(&1.control_id == control_id))
+
+      new_content = %{
+        version: control["version"] || metadata.version,
+        statement: control["statement"] || control["title"],
+        params: control["params"] || [],
+        citations: control["citations"] || []
+      }
+
+      ruling =
+        case existing do
+          nil ->
+            :create
+
+          found ->
+            rule_control(found, new_content, instant, opts)
+        end
+
+      case ruling do
+        :skip ->
+          {:cont, :ok}
+
+        {:refuse, message} ->
+          {:halt, {:error, message}}
+
+        :create ->
+          {:ok, control_record} =
+            case existing do
+              nil ->
+                Domain.create_control(
+                  %{
+                    organization_id: organization_id,
+                    catalog_id: catalog_id,
+                    control_id: control_id,
+                    title: control["title"],
+                    # flatten_controls resolved each control's family already.
+                    family: control["family"]
+                  },
+                  opts
+                )
+
+              found ->
+                {:ok, found}
+            end
+
+          case create_active_revision(control_record, new_content, instant, opts) do
+            {:ok, _revision} -> {:cont, :ok}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+      end
+    end)
+  end
+
+  # The per-control ruling for a re-import (see import_controls/6).
+  defp rule_control(control, new_content, instant, opts) do
+    history = Domain.control_revisions_for_control!(control.id, opts)
+
+    content_matches? = fn revision ->
+      revision.statement == new_content.statement and
+        revision.params == new_content.params and
+        revision.citations == new_content.citations
+    end
+
+    cond do
+      # Unchanged content: this control is a no-op (the catalog version
+      # still records the re-publication).
+      Enum.any?(history, content_matches?) ->
+        :skip
+
+      # Changed content under a used version string: refuse before any
+      # withdrawal — never leave a control withdrawn with no successor.
+      Enum.any?(history, &(&1.version == new_content.version)) ->
+        {:refuse,
+         "control #{inspect(control.control_id)} version #{inspect(new_content.version)} " <>
+           "already exists with different content — a re-import must carry a new control version"}
+
+      # Changed content under a new version string: withdraw every active
+      # predecessor at the instant (draining the multi-active drift) and
+      # open the successor there.
+      true ->
+        withdraw_predecessors(control, instant, opts)
+        :create
+    end
+  end
+
+  defp create_active_revision(control_record, new_content, instant, opts) do
+    Domain.create_control_revision(
+      %{
+        control_id: control_record.id,
+        version: new_content.version,
+        statement: new_content.statement,
+        params: new_content.params,
+        citations: new_content.citations,
+        status: :active
+      },
+      Keyword.put(opts, :as_of, instant)
+    )
+  end
+
+  # Every ACTIVE revision of the control is withdrawn at the instant —
+  # not just the newest: a catalog re-imported over the old multi-active
+  # drift drains it in one pass.
+  defp withdraw_predecessors(control, instant, opts) do
+    control.id
+    |> Domain.active_control_revisions!(opts)
+    |> Enum.each(fn predecessor ->
+      Domain.withdraw_control_revision!(predecessor, Keyword.put(opts, :as_of, instant))
+    end)
   end
 
   @doc """
@@ -193,7 +404,15 @@ defmodule AshCompliance.Oscal do
      }}
   end
 
-  @doc "Imports an OSCAL profile document. Returns the created profile."
+  @doc """
+  Imports an OSCAL profile document. Returns the created profile.
+
+  Accepts `published_at:` like `import_catalog/2` — the profile revision's
+  declared creation instant (a historical import lands at its true
+  publication time). Profiles have no active/withdraw lifecycle, so there
+  is no predecessor discipline: each import creates a new profile and
+  revision, as always.
+  """
   @spec import_profile(map() | String.t(), keyword()) ::
           {:ok, Profile.t()} | {:error, String.t() | [String.t()]}
   def import_profile(json, opts \\ [])
@@ -208,6 +427,7 @@ defmodule AshCompliance.Oscal do
   def import_profile(document, opts) when is_map(document) do
     organization_id = Keyword.fetch!(opts, :organization_id)
     catalog_id = Keyword.get(opts, :catalog_id)
+    instant = Keyword.get(opts, :published_at) || now()
     opts = call_opts(opts)
 
     with {:ok, metadata} <- fetch_metadata(document),
@@ -234,7 +454,7 @@ defmodule AshCompliance.Oscal do
             operations: operations,
             content_hash: content_hash
           },
-          opts
+          Keyword.put(opts, :as_of, instant)
         )
 
       {:ok, profile}
@@ -311,16 +531,6 @@ defmodule AshCompliance.Oscal do
         {:ok, controls}
       end
     end
-  end
-
-  defp group_family(document, control_id) do
-    document
-    |> Map.get("groups", [])
-    |> Enum.find_value(nil, fn group ->
-      if Enum.any?(group["controls"] || [], &(&1["id"] == control_id)) do
-        group["id"]
-      end
-    end)
   end
 
   # OSCAL profile constructs (set_parameters, alters removals/adds) map onto
