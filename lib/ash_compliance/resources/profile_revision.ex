@@ -29,11 +29,40 @@ defmodule AshCompliance.Resources.ProfileRevision do
 
   `content_hash` pins the revision: identical operations produce identical
   hashes.
+
+  ## The period opens at creation (Phase 3, temporal resources)
+
+  This is a **temporal resource** (`strategy :context`, period attribute
+  `valid_at`). Profile revisions are **create+read only** — append-only by
+  absence of actions — so a revision's period opens at its creation instant
+  and never ends: nothing ever splits it. A plain read is the as-of-now
+  containment read; `Ash.Query.as_of/2` (or the `as_of:` option) travels
+  through code interfaces, so "the latest revision as of T" and "the
+  revisions that existed at T" are containment queries, not insertion-order
+  conventions.
+
+  `latest_for_profile` keeps its ordering contract, restated temporally:
+  newest period-lower first (the `inserted_at` tail is only a same-second
+  tiebreak). Under `as_of`, the identical read answers "the latest revision
+  as of T" — revisions created after T are not visible, so the answer
+  travels backward correctly.
+
+  `unique_revision` keeps its name and meaning, now period-aware (`UNIQUE
+  ... WITHOUT OVERLAPS`): unique at every instant. With only open-ended
+  creates, any two same-keyed revisions overlap, so it fires exactly as the
+  old plain unique index did. (No update actions exist, so a row can never
+  conflict with its own history — the self-split question is structurally
+  unreachable here.)
   """
 
   use AshCompliance.Resource, table: "profile_revisions"
 
   alias AshCompliance.Oscal.ProfileOperation
+
+  temporal do
+    strategy(:context)
+    attribute(:valid_at)
+  end
 
   attributes do
     uuid_primary_key(:id)
@@ -49,6 +78,18 @@ defmodule AshCompliance.Resources.ProfileRevision do
 
   identities do
     identity(:unique_revision, [:profile_id, :version])
+  end
+
+  calculations do
+    # When the revision came into force: the period's lower bound (SQL
+    # `lower()`, filterable and sortable at the data layer) — the creation
+    # instant. This is the "newest" of the containment read's ordering;
+    # microsecond-granular where `inserted_at` is second-granular, so it
+    # also breaks same-second ties deterministically.
+    calculate(:effective_from, :utc_datetime_usec, expr(range_lower(valid_at)),
+      public?: true,
+      description: "The instant the revision's period opens (inclusive) — its creation."
+    )
   end
 
   actions do
@@ -67,7 +108,13 @@ defmodule AshCompliance.Resources.ProfileRevision do
     read :latest_for_profile do
       argument(:profile_id, :uuid, allow_nil?: false)
       get?(true)
-      prepare(build(sort: [inserted_at: :desc], limit: 1))
+
+      # The as-of-now containment read with preserved ordering. The
+      # temporal layer already scopes a plain read to the revisions whose
+      # period contains the read instant; newest = greatest period-lower
+      # (the creation instant). The `inserted_at` tail is only a
+      # total-order tiebreak for revisions created in the same second.
+      prepare(build(sort: [effective_from: :desc, inserted_at: :desc], limit: 1))
       filter(expr(profile_id == ^arg(:profile_id)))
     end
 
