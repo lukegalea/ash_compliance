@@ -279,15 +279,23 @@ defmodule AshCompliance.LayeringTest do
       layer: layer,
       combining: Keyword.get(opts, :combining, :deny_overrides),
       rules_json: json,
-      content_hash: Support.unique()
+      content_hash: Support.unique(),
+      # Fixture writes land inside the pinned compile clock's window (see
+      # activate_revision); assertions are untouched.
+      as_of: @now
     )
   end
 
   defp activate_revision(revision) do
+    # The lifecycle chain writes as of the fixture clock, so the compile's
+    # pinned `now` (@now) is the gather's as-of and finds these revisions
+    # in force: the temporal gather answers "in force at the pin", and a
+    # wall-now activation would postdate the pin (calendar drift between
+    # the authored fixtures and the run). Assertions unchanged.
     revision
-    |> AshCompliance.Domain.validate_rule_set_revision!(authorize?: false)
-    |> AshCompliance.Domain.approve_rule_set_revision!(authorize?: false)
-    |> AshCompliance.Domain.activate_rule_set_revision!(authorize?: false)
+    |> AshCompliance.Domain.validate_rule_set_revision!(authorize?: false, as_of: @now)
+    |> AshCompliance.Domain.approve_rule_set_revision!(authorize?: false, as_of: @now)
+    |> AshCompliance.Domain.activate_rule_set_revision!(authorize?: false, as_of: @now)
   end
 
   defp waive(rule_id, opts) do

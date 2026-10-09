@@ -268,8 +268,15 @@ defmodule AshCompliance.Test.Support do
       content_hash: AshCompliance.Test.RuleSets.GlobalBaseline.__bundle__().content_hash
     ]
 
+    # `:as_of` is a write-instant option, not an action input: the temporal
+    # draft create opens its period there (tests that pin a compile clock
+    # backdate their fixtures into that clock's window — the strategy
+    # memo's sanctioned backdating).
+    {as_of, attrs} = Keyword.pop(attrs, :as_of)
+
     AshCompliance.Domain.draft_rule_set_revision!(Keyword.merge(defaults, attrs),
-      authorize?: false
+      authorize?: false,
+      as_of: as_of
     )
   end
 
