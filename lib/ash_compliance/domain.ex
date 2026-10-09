@@ -128,6 +128,11 @@ defmodule AshCompliance.Domain do
     resource(AshCompliance.Resources.TenantPolicySet) do
       define(:create_tenant_policy_set, action: :create)
       define(:set_active_bundle, action: :set_active_bundle)
+
+      # The membership change: replaces the pinned revision lists, splitting
+      # the set's period (slice 5).
+      define(:set_revisions, action: :set_revisions)
+
       define(:get_tenant_policy_set_by_id, action: :read, get_by: [:id])
 
       # Absence is meaningful: an organization with no tenant policy set yet
