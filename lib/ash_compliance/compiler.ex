@@ -114,14 +114,20 @@ defmodule AshCompliance.Compiler do
      %{
        organization_id: organization_id,
        now: now,
-       rule_sets: active_rule_sets(organization_id),
+       rule_sets: active_rule_sets(organization_id, now),
        profile_revisions: profile_revisions(organization_id),
        overrides: valid_overrides(organization_id, now)
      }}
   end
 
-  defp active_rule_sets(organization_id) do
-    Domain.active_rule_set_revisions!(organization_id, authorize?: false)
+  defp active_rule_sets(organization_id, now) do
+    # The compile clock IS the as-of (§1): the same pinned `now` that drives
+    # waiver expiry drives the revision reads, so one instant governs the
+    # whole gather and the compile stays deterministic — "in force at now"
+    # is the temporal containment read, not a wall-clock glance. Plain reads
+    # are as-of-now, so an unpinned compile behaves exactly as before the
+    # swap.
+    Domain.active_rule_set_revisions!(organization_id, as_of: now, authorize?: false)
   end
 
   defp profile_revisions(organization_id) do
