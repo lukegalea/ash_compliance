@@ -37,6 +37,16 @@ MFA. The hash on a finding must be traceable to an active `PolicyBundle` row
    validate-before-activate — the stored JSON must pass `AshRules.Ir.decode/1`
    in full before it can go live. Revisions are immutable: every save drafts
    a *new* revision; nothing already live is ever overwritten.
+   `RuleSetRevision` is a temporal resource: each lifecycle update splits its
+   period, so an `as_of:` read answers which status held at T. `activate`
+   takes an optional `effective_at` argument to future-date the activation.
+   Two revisions of the same `(organization_id, name)` cannot be active at
+   overlapping instants — the database rejects the second activation; retire
+   the old one first. (Global revisions with `organization_id: nil` are not
+   covered by that constraint.) `TenantPolicySet` is period-versioned the same
+   way: `set_revisions` and `set_active_bundle` split its period, and
+   `tenant_policy_set(org_id, as_of: t)` returns the set that held at `t`.
+   The compile itself reads the current set.
 2. **The precedence is fixed.** Six ranks, and lower rank wins on conflict:
    `:global_non_waivable` > `:global_mandatory` > `:profile_refinement` >
    `:tenant_strengthening` > `:approved_override` > `:tenant_supplement`
@@ -53,7 +63,14 @@ MFA. The hash on a finding must be traceable to an active `PolicyBundle` row
    evaluated against the *compile clock*: an expired waiver is excluded from
    resolution entirely, so a waiver lapsing returns its rule to the effective
    bundle without any action being taken. That is a feature, not a bug to
-   suppress.
+   suppress. `PolicyOverride` is a temporal resource (period attribute
+   `valid_at`): `starts_at` and `expires_at` are **create arguments** that set
+   the period and read back only as calculations over it — there are no
+   stored columns to write. A future `starts_at` future-dates the waiver
+   (invisible to reads and compiles until that instant, no scheduler). The
+   database rejects a second waiver whose window overlaps one already granted
+   for the same organization, rule and subject scope (`WITHOUT OVERLAPS`);
+   successive, non-overlapping windows are fine.
 4. **The finding is the now, the evaluation is the decision.** `Finding` is a
    projection on the grain `[organization_id, control_id, subject_type,
    subject_id]`; `ComplianceEvaluation` is create-only — never updated,
@@ -81,7 +98,16 @@ MFA. The hash on a finding must be traceable to an active `PolicyBundle` row
 
 In order, before the first compile of a host that uses this package:
 
-1. **Set the repo in `config/config.exs` — before deps compile.** Resources
+1. **Meet the floor.** PostgreSQL 18 with the `btree_gist` extension,
+   `ash ~> 3.34` and `ash_postgres ~> 2.14`. `PolicyOverride`, `CatalogVersion`,
+   `ControlRevision`, `RuleSetRevision`, `ProfileRevision` and
+   `TenantPolicySet` are temporal resources: the `temporal` DSL needs those
+   Ash versions, and their keys and identities become `WITHOUT OVERLAPS`
+   constraints, which need PostgreSQL 18 and `btree_gist`. Declare
+   `min_pg_version` 18 and `btree_gist` in the host repo's
+   `installed_extensions` (the test repo, `test/support/test_repo.ex`, shows
+   both).
+2. **Set the repo in `config/config.exs` — before deps compile.** Resources
    bind `@repo Application.compile_env(:ash_compliance, :repo,
    AshCompliance.TestRepo)` at *compile time*
    (`lib/ash_compliance/resource.ex`; `Finding` repeats it). The default is a
@@ -90,17 +116,17 @@ In order, before the first compile of a host that uses this package:
    release. `table_prefix` resolves the same way (default
    `"ash_compliance_"`). A runtime `AshCompliance.repo/0` also exists, but
    the compile-time binding is the one that bites.
-2. **Register the domain.** Add `AshCompliance.Domain` to the host's
+3. **Register the domain.** Add `AshCompliance.Domain` to the host's
    `ash_domains` (or expose the same code interfaces from a host domain).
-3. **Port the migrations.** The suite's `priv/test_repo/migrations` is the
+4. **Port the migrations.** The suite's `priv/test_repo/migrations` is the
    reference schema for the `ash_compliance_*` tables (plus the projector
    engine's tables); generate or port them into the host's migrations.
-4. **No organizations? Use the single-org constant.** Tenancy here is an
+5. **No organizations? Use the single-org constant.** Tenancy here is an
    explicit `organization_id` attribute on every row — deliberately not Ash
    multitenancy, so shared catalogs (`organization_id: nil`) stay joinable.
    Org-less hosts mirror the clinic-demo pattern: a module attribute UUID and
    `def organization_id, do: @org`, passed everywhere.
-5. **The guard path is sync-only.** Reading the active bundle and evaluating
+6. **The guard path is sync-only.** Reading the active bundle and evaluating
    it needs no Oban, no projector, no supervisor. Oban is a dev/test-only dep
    here. Add `AshEvents.Projections.Supervisor` to the tree and register a
    projector only when you want findings projected from an event log; test
@@ -118,6 +144,20 @@ pass, `record_evaluation/2` runs **after the transaction, best-effort** — a
 failed audit row is a logged warning, never a veto of a transition that
 legitimately passed. Reference implementation:
 `ClinicDemo.Scheduling.Changes.ComplianceGuard` in the clinic-demo host.
+
+To *show* status instead of enforcing it, call
+`AshCompliance.status_for(record, organization: ..., fact_builder: ...)`. It
+runs the same evaluation against the active bundle and writes nothing (no
+audit row). It returns `{:ok, %AshCompliance.Status{}}` with an overall
+`status`, one `AshCompliance.Status.Verdict` per rule (`rule_id`, `severity`,
+`gap`, `status`, `message`), the bundle hash and revision, and the missing
+facts; `AshCompliance.Status.message/1` renders the guard's refusal text. No
+active bundle is `{:error, :no_active_bundle}`, not compliance. Facts come
+from the host through the `AshCompliance.FactBuilder` behaviour (a module, a
+`{module, function}` pair, a capture, or the record's own module when it
+implements the behaviour); `:facts` passes triples directly. Options other
+than `:organization`, `:bundle`, `:facts` and `:fact_builder` reach the
+builder, so the guard's `transition_to` works the same way here.
 
 ## RulesetEditorLive
 
@@ -139,8 +179,9 @@ diagnostics inline; a rule set that does not verify stays draft.
 ## Agent integration
 
 `ash_agent_tools` has **no compliance-specific tool**: its optional
-integrations are exactly `:ash_rules` (the rules dry-evaluation tool) and
-`:ash_state_machine` (the transitions tool) — check
+integrations are `:ash_rules` (the rules dry-evaluation tool),
+`:ash_state_machine` (the transitions tool), `:ash_bpmn` (the process tools)
+and `:ash_decisions` (the DMN decision tools) — check
 `AshAgentTools.availability/0` for what is active in a given host. This
 package's resources are ordinary Ash resources, so agents reach them with
 the generic tools: `describe_resource`/`describe_action` for the action
