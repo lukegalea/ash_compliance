@@ -231,8 +231,9 @@ the grain, not by a query filter bolted on at each call site.
 ## Installation
 
 Not yet on Hex. Requires PostgreSQL 18 with the `btree_gist` extension,
-`ash ~> 3.34` and `ash_postgres ~> 2.14` (the control-plane resources are
-temporal resources). As a git dependency:
+`ash ~> 3.34` and `ash_postgres ~> 2.14` (six control-plane resources are
+temporal: PolicyOverride, CatalogVersion, ControlRevision, RuleSetRevision,
+ProfileRevision, TenantPolicySet). As a git dependency:
 
 ```elixir
 defp deps do
