@@ -91,7 +91,9 @@ defmodule AshCompliance.Oscal do
       — repeated imports leaving several active revisions per control —
       is killed at its source. A catalog version string that already
       exists with different content is likewise refused: a re-import must
-      carry a new `metadata.version`.
+      carry a new `metadata.version`. Content identical to an earlier,
+      non-latest catalog version is refused too (content hashes are
+      unique per catalog); only a match with the latest is a no-op.
     * **No matching catalog** → fresh import, as always.
 
   The `:published_at` option declares the **publication instant** for the
@@ -105,7 +107,9 @@ defmodule AshCompliance.Oscal do
   wrapped in one transaction (pre-existing behavior): a failure partway
   leaves the controls imported so far — with predecessors correctly
   withdrawn at the same instant, so no multi-active state is possible
-  even mid-import.
+  even mid-import. A failure creating a control's successor revision
+  after its predecessors were withdrawn leaves that control withdrawn
+  with no active revision.
   """
   @spec import_catalog(map() | String.t(), keyword()) ::
           {:ok, Catalog.t()} | {:error, String.t() | [String.t()]}
@@ -233,8 +237,9 @@ defmodule AshCompliance.Oscal do
   #     state.
   #   * New control → created directly active, as always.
   #
-  # Because the refusals pre-check before any withdrawal, a control can
-  # never be left withdrawn-with-no-successor.
+  # The reused-version refusal is pre-checked before any withdrawal. A
+  # failure in create_active_revision/4 after the withdrawal is not, and
+  # leaves that control withdrawn with no successor.
   defp import_controls(organization_id, catalog_id, controls, metadata, instant, opts) do
     existing_controls =
       if catalog_id do
@@ -315,7 +320,7 @@ defmodule AshCompliance.Oscal do
         :skip
 
       # Changed content under a used version string: refuse before any
-      # withdrawal — never leave a control withdrawn with no successor.
+      # withdrawal, so this refusal never leaves a control withdrawn.
       Enum.any?(history, &(&1.version == new_content.version)) ->
         {:refuse,
          "control #{inspect(control.control_id)} version #{inspect(new_content.version)} " <>

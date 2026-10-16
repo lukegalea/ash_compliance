@@ -29,10 +29,47 @@ or programmatically:
   control ids stay verbatim and stable.
 * **Parameters** — control `params` are stored on the control revision.
 * **Citations** — stored on the control revision.
-* **Revision lineage** — every import creates a `CatalogVersion` /
+* **Revision lineage** — an import records a `CatalogVersion` /
   `ProfileRevision` with a content hash, the document version and a source
-  note. Re-importing identical content produces an identical hash; versions
-  are unique per `(catalog, version)`.
+  note.
+
+### Re-importing a catalog
+
+A catalog document whose `(organization_id, metadata.title)` matches an
+existing catalog is a re-import, decided by content:
+
+* **Same content as the catalog's latest version** — a no-op. The existing
+  catalog is returned and nothing is written.
+* **Changed content** — a new `CatalogVersion` on the same catalog. Each
+  control is decided on its own: an unchanged control is skipped; a changed
+  control under a new version string has its active revisions withdrawn at
+  the import instant and its new revision opened at that same instant.
+* **Refused** — changed content under a catalog `metadata.version` that
+  already exists for the catalog, or changed control content under a
+  version string the control already uses. A re-import must carry a new
+  version (a control's version is its own `version`, else the document's
+  `metadata.version`). Content identical to an earlier catalog version that
+  is not the latest is also refused: only a match with the latest version
+  is a no-op, and the catalog's content hashes are unique, so the import
+  fails with the same "already exists with different content" error.
+
+The reused-version-string refusal is checked before a control's
+predecessors are withdrawn. A failure after the withdrawal, while creating
+the successor revision (a validation error, say), is not: it can leave
+that control withdrawn with no active revision.
+
+The import is not one transaction. A failure partway leaves the controls
+imported so far in place, each with its predecessors already withdrawn,
+and the control being imported when it failed may be withdrawn with no
+successor (see above).
+
+`published_at:` declares the instant the whole import lands at (default:
+now), so a historical document can be imported at its real publication
+time. It sets the catalog version's period start, the new control
+revisions' start and the withdrawal instant. `import_profile/2` accepts it
+too. Profiles have no withdraw lifecycle: every profile import creates a new
+profile and revision. The mix task has no flag for `published_at:`; call
+`AshCompliance.Oscal` directly for that.
 
 ### How OSCAL profiles map to house operations
 

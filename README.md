@@ -156,6 +156,10 @@ checkpointing and dead-lettering handled by the projector engine.
 * **OSCAL interop** — catalog and profile import/export via
   `AshCompliance.Oscal` and the `mix ash_compliance.import_oscal` /
   `mix ash_compliance.export_oscal` tasks.
+* **Record-level status** — `AshCompliance.status_for/2` evaluates the
+  active bundle against one record, read-only, and returns per-rule verdicts
+  (`AshCompliance.Status`, `AshCompliance.Status.Verdict`). The host supplies
+  facts through the `AshCompliance.FactBuilder` behaviour.
 
 There is deliberately **no API layer**: resources, actions, the compiler and
 the projector only. Wire exposure is the host's concern. Every public action
@@ -226,7 +230,10 @@ the grain, not by a query filter bolted on at each call site.
 
 ## Installation
 
-Not yet on Hex. As a git dependency:
+Not yet on Hex. Requires PostgreSQL 18 with the `btree_gist` extension,
+`ash ~> 3.34` and `ash_postgres ~> 2.14` (six control-plane resources are
+temporal: PolicyOverride, CatalogVersion, ControlRevision, RuleSetRevision,
+ProfileRevision, TenantPolicySet). As a git dependency:
 
 ```elixir
 defp deps do
