@@ -140,7 +140,7 @@ defmodule AshCompliance.TemporalRuleSetRevisionTest do
 
   # --- §4(c): the exclusion rejects double-activation at the database --------------
 
-  test "activating a second revision of one name while one is in force is refused" do
+  test "activating a second revision of one name succeeds it and retires the predecessor at the same instant" do
     org = Ecto.UUID.generate()
     name = "double-#{System.unique_integer([:positive])}"
 
@@ -153,25 +153,16 @@ defmodule AshCompliance.TemporalRuleSetRevisionTest do
       draft(org, name, revision: "2")
       |> lifecycle(@now, [:validate, :approve])
 
-    assert {:error, %Ash.Error.Invalid{} = error} =
-             Domain.activate_rule_set_revision(second, authorize?: false, as_of: @now)
+    Domain.activate_rule_set_revision!(second, authorize?: false, as_of: hours_after(@now, 1))
 
-    assert Enum.any?(error.errors, &(&1.message =~ "has already been taken"))
-
-    # No partial state: exactly one active, and it is the first.
-    assert [%{id: id}] = actives_at(org, @now)
-    assert id == first.id
-
-    # Retiring the first NULLs its active_key: the successor's path opens.
-    Domain.retire_rule_set_revision!(first, authorize?: false, as_of: hours_after(@now, 1))
-
-    assert %{id: id} =
-             Domain.activate_rule_set_revision!(second,
-               authorize?: false,
-               as_of: hours_after(@now, 2)
-             )
-
+    # Exactly one active, and it is the successor.
+    assert [%{id: id}] = actives_at(org, hours_after(@now, 1))
     assert id == second.id
+
+    # The predecessor's period closed at the successor's instant: one
+    # second earlier the first revision was still in force.
+    assert [%{id: id1}] = actives_at(org, @now)
+    assert id1 == first.id
   end
 
   test "actives of different names do not collide, and future-dated actives are guarded too" do
@@ -191,20 +182,31 @@ defmodule AshCompliance.TemporalRuleSetRevisionTest do
     assert [id_a, id_b] = actives_at(org, @now) |> Enum.map(& &1.id) |> Enum.sort()
     assert Enum.sort([a.id, b.id]) == [id_a, id_b]
 
-    # A future-dated activation of the SAME name conflicts with the
-    # in-force active even though the write's period opens in the future:
-    # the periods overlap (one active per name at ANY instant).
+    # A future-dated activation of the SAME name succeeds the in-force
+    # active at the future instant: the predecessor stays in force until
+    # friday, the successor from friday on (one active per name at ANY
+    # instant, without a manual retire).
     friday = hours_after(@now, 24)
 
     successor = lifecycle(draft(org, name, revision: "2"), @now, [:validate, :approve])
 
-    assert {:error, %Ash.Error.Invalid{} = error} =
-             Domain.activate_rule_set_revision(successor, %{effective_at: friday},
-               authorize?: false,
-               as_of: @now
-             )
+    activated =
+      Domain.activate_rule_set_revision!(successor, %{effective_at: friday},
+        authorize?: false,
+        as_of: @now
+      )
 
-    assert Enum.any?(error.errors, &(&1.message =~ "has already been taken"))
+    assert activated.id == successor.id
+
+    # Before friday: the first revision is still in force (and beta, of
+    # the other name, throughout).
+    ids_before = actives_at(org, hours_after(@now, 1)) |> Enum.map(& &1.id)
+    assert a.id in ids_before and b.id in ids_before
+
+    # From friday: the successor, with beta untouched.
+    ids_at = actives_at(org, hours_after(@now, 25)) |> Enum.map(& &1.id)
+    assert successor.id in ids_at and b.id in ids_at
+    refute a.id in ids_at
   end
 
   # --- §4(d): formal self-split adjacency ------------------------------------------

@@ -67,11 +67,13 @@ defmodule AshCompliance.Resources.RuleSetRevision do
     * The `one_active_per_name` identity keys `(organization_id, name,
       active_key)` into a `UNIQUE (... WITHOUT OVERLAPS)` GiST exclusion.
       **GiST equality never conflicts on NULLs**, so non-active rows never
-      conflict and the exclusion constrains only genuinely-active rows:
-      activating a second revision of the same name while one is in force
-      is rejected by the database. Retire (or revoke-after-activate is
-      refused; retire is the path) NULLs the key, so history never blocks a
-      successor.
+      conflict and the exclusion constrains only genuinely-active rows.
+      `:activate` succeeds the in-force revision: the predecessor retires
+      in the same transaction at the same write instant (the
+      activate-2-then-retire-1 lifecycle), so two genuinely-active rows of
+      one name never coexist — the exclusion remains the guard for any
+      write that would overlap without succeeding (multi-row races land on
+      the database's refusal).
     * **This is NOT the waiver's `scope_key` trick** — do not "simplify" one
       into the other. `scope_key` is a *non-null stand-in* for nullable
       columns: it substitutes a sentinel so NULL-scoped rows DO conflict.
@@ -243,6 +245,11 @@ defmodule AshCompliance.Resources.RuleSetRevision do
       argument(:effective_at, :utc_datetime_usec)
 
       change(set_attribute(:status, :active))
+
+      # Succession (the activate-2-then-retire-1 lifecycle): the active
+      # predecessor of the same name retires in this transaction, at the
+      # same write instant.
+      change({AshCompliance.Resources.RuleSetRevision.Changes.RetirePredecessor, []})
     end
 
     update :retire do
