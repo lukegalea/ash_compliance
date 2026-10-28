@@ -3,29 +3,25 @@
 
 defmodule AshCompliance.Compiler.Layer do
   @moduledoc """
-  The fixed layering precedence, expressed as data.
+  The six-rank default precedence, answered from
+  `AshCompliance.Layering.Default`.
 
-  The design fixes the order — non-waivable global > global mandatory >
-  profile refinements > tenant strengthening > approved replacements/waivers >
-  tenant supplements — and the compiler refuses ad-hoc inheritance: a rule's
-  precedence is determined entirely by the layer it was declared in, never by
-  who compiled the bundle or when.
-
-  Lower rank wins on conflict (same rule id). `rank/1` is the single source of
-  the order; `outranks?/2` and the waiver/replace permission checks derive
-  from it.
+  Non-waivable global > global mandatory > profile refinements > tenant
+  strengthening > approved replacements/waivers > tenant supplements. Lower
+  rank wins on conflict (same rule id). The order and permissions are
+  declared once, in `AshCompliance.Layering.Default`; these functions are the
+  stable vocabulary `RuleSetRevision` and the editor are built on. A host
+  that needs a different order declares its own `AshCompliance.Layering`
+  scheme and passes it to the compiler — it does not change this module.
   """
 
-  @non_waivable :global_non_waivable
-  @mandatory :global_mandatory
-  @refinement :profile_refinement
-  @strengthening :tenant_strengthening
+  alias AshCompliance.Layering
+  alias AshCompliance.Layering.Default
+
   @override :approved_override
   @supplement :tenant_supplement
 
-  @layers [@non_waivable, @mandatory, @refinement, @strengthening, @override, @supplement]
-
-  @typedoc "A layer of the fixed precedence."
+  @typedoc "A layer of the default precedence."
   @type t() ::
           :global_non_waivable
           | :global_mandatory
@@ -36,11 +32,11 @@ defmodule AshCompliance.Compiler.Layer do
 
   @doc "All layers, highest precedence first."
   @spec layers() :: [t(), ...]
-  def layers, do: @layers
+  def layers, do: Layering.layers(Default)
 
   @doc "The rule-set layers a `RuleSetRevision` may declare (overrides are approval artifacts)."
   @spec revision_layers() :: [t(), ...]
-  def revision_layers, do: [@non_waivable, @mandatory, @refinement, @strengthening, @supplement]
+  def revision_layers, do: Enum.reject(layers(), &(&1 == @override))
 
   @doc "The statuses a `RuleSetRevision` moves through."
   @spec statuses() :: [atom(), ...]
@@ -48,12 +44,10 @@ defmodule AshCompliance.Compiler.Layer do
 
   @doc "The rank of a layer: lower outranks higher."
   @spec rank(t()) :: pos_integer()
-  def rank(@non_waivable), do: 1
-  def rank(@mandatory), do: 2
-  def rank(@refinement), do: 3
-  def rank(@strengthening), do: 4
-  def rank(@override), do: 5
-  def rank(@supplement), do: 6
+  def rank(layer) do
+    Layering.rank(Default, layer) ||
+      raise ArgumentError, "#{inspect(layer)} is not a layer of the default precedence"
+  end
 
   @doc "True if layer `a` outranks layer `b`."
   @spec outranks?(t(), t()) :: boolean()
@@ -65,15 +59,14 @@ defmodule AshCompliance.Compiler.Layer do
   i.e. tenant supplements. Baseline layers outrank approvals by design.
   """
   @spec replaceable?(t()) :: boolean()
-  def replaceable?(target), do: rank(target) > rank(@override)
+  def replaceable?(target), do: Layering.reaches?(Default, @override, :replace, target)
 
   @doc """
   True if a waiver may target a rule declared in `target`. Only the
   non-waivable global layer refuses waivers.
   """
   @spec waivable?(t()) :: boolean()
-  def waivable?(@non_waivable), do: false
-  def waivable?(_), do: true
+  def waivable?(target), do: not Layering.protected?(Default, target, :waive)
 
   @doc "The rank of the override layer (for sorting contributions)."
   @spec override_layer() :: t()

@@ -31,8 +31,8 @@ approved:
 `PolicyBundle.compile` runs `AshCompliance.Compiler` inside the action: the
 compiler fetches the active rule set revisions (global + tenant), the
 tenant policy set's profile revisions, and the still-valid overrides, resolves
-them through the fixed precedence, validates the result through
-`AshRules.Verifier`, and stores the serialized bundle with its content hash
+them through the declared layering scheme (the six ranks by default),
+validates the result through `AshRules.Verifier`, and stores the serialized bundle with its content hash
 and a manifest revision string built from the contributing ids. The same
 input state always compiles to the same hash.
 

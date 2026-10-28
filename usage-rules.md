@@ -12,8 +12,9 @@ alike._
 
 The **control plane** — `Catalog`/`CatalogVersion`, `Control`/`ControlRevision`,
 `Profile`/`ProfileRevision`, `RuleSetRevision`, `TenantPolicySet`,
-`PolicyOverride` (waivers), `ControlMapping` — compiles, through the fixed
-layering precedence, into the immutable `PolicyBundle`. The **data plane** is
+`PolicyOverride` (waivers), `ControlMapping` — compiles, through a declared
+layering scheme (the six-rank `AshCompliance.Layering.Default` unless the
+host passes its own), into the immutable `PolicyBundle`. The **data plane** is
 what evaluation produces: `Finding` rows projected from the event log (the
 "now"), append-only `ComplianceEvaluation` records (the auditor's "why"),
 and immutable `EvidenceArtifact` references. The two planes are wired together
@@ -47,17 +48,31 @@ MFA. The hash on a finding must be traceable to an active `PolicyBundle` row
    way: `set_revisions` and `set_active_bundle` split its period, and
    `tenant_policy_set(org_id, as_of: t)` returns the set that held at `t`.
    The compile itself reads the current set.
-2. **The precedence is fixed.** Six ranks, and lower rank wins on conflict:
-   `:global_non_waivable` > `:global_mandatory` > `:profile_refinement` >
-   `:tenant_strengthening` > `:approved_override` > `:tenant_supplement`
-   (`AshCompliance.Compiler.Layer.rank/1` is the single source of the order).
-   Non-waivable global rules cannot be waived or replaced by anything; a
-   waiver may target any other layer but rides at the override rank, so it
+2. **The precedence is declared, never improvised.** A layering scheme is a
+   module implementing `AshCompliance.Layering`: ordered layers (outermost
+   first), each layer's permitted operations and their reach (`add`,
+   `tighten`, `exclude`, `refine`, `waive`, `replace`, `parameterize`),
+   protected operations, an optional required `scope_key`, and the
+   precedence semantics. It is passed explicitly to
+   `AshCompliance.Compiler.compile(scheme: ...)` or
+   `AshCompliance.Compiler.resolve/3` — there is no application-env switch,
+   because one host may run several schemes. With no `:scheme` the compiler
+   uses `AshCompliance.Layering.Default`, the six ranks, lower rank winning on
+   conflict: `:global_non_waivable` > `:global_mandatory` >
+   `:profile_refinement` > `:tenant_strengthening` > `:approved_override` >
+   `:tenant_supplement` (`AshCompliance.Compiler.Layer` answers from it).
+   There, non-waivable global rules cannot be waived or replaced by anything;
+   a waiver may target any other layer but rides at the override rank, so it
    never outranks its target; a replacement may only displace tenant
-   supplements. Do not add "just this once" layer jumps, caller-supplied rule
-   lists, or inheritance shortcuts — the compiler refuses overreach and
-   weakening that outranks nothing. If a layer's permissions are wrong for a
-   program, change the design document first and `Layer` second.
+   supplements. Whatever the scheme, a `tighten` must be strictly stronger, a
+   scoped contribution applies only where its scope matches the resolution
+   context (so an inner removal never narrows an outer read), and the
+   compiler refuses overreach rather than applying it. Do not add "just this
+   once" layer jumps, caller-supplied orders, or inheritance shortcuts. If a
+   layer's permissions are wrong for a program, change the design document
+   (`documentation/topics/layering-and-combining.md`) first and the scheme
+   second — a new scheme module for a new program, never an edit to
+   `Layering.Default` that moves existing bundles.
 3. **Waivers are bounded, approved and offset.** `expires_at`, `approver` and
    `compensating_controls` (at least one) are validation-enforced. Expiry is
    evaluated against the *compile clock*: an expired waiver is excluded from

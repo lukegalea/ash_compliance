@@ -16,6 +16,21 @@ Nothing has been released yet. Everything below is the initial body of work.
 
 ### Changed:
 
+- **Declared layer schemes, scoped contributions, pluggable contribution
+  sources; the default six-rank scheme is unchanged.** `AshCompliance.Layering`
+  is a behaviour a scheme module implements — ordered layers, per-layer
+  operations with reach (`add`, `tighten`, `exclude`, `refine`, `waive`, `replace`,
+  `parameterize`), protected operations, required scope keys and precedence
+  semantics. `AshCompliance.Layering.Default` declares the six ranks;
+  `AshCompliance.Compiler.Layer` answers from it. The compiler is split into
+  a gather (`AshCompliance.Compiler.ContributionSource`, default
+  `DatabaseSource`) and a pure merge (`AshCompliance.Compiler.resolve/3`,
+  returning an `AshCompliance.Compiler.Resolution` with per-rule lineage and
+  refusals). Contributions may be scoped and resolved against a context;
+  `tighten` is refused unless strictly stronger; param placeholders in
+  predicate values are bound so thresholds land in the bundle hash.
+  `compile/1` with no `:scheme`/`:source` is unchanged: same bundles, hashes,
+  lineage and refusal messages.
 - **Phase 3 (temporal waivers)**: `PolicyOverride` is now a temporal resource
   (`strategy :context`, period attribute `valid_at`) — the in-force window IS
   the period. The stored `starts_at`/`expires_at` columns are replaced by the
@@ -72,9 +87,9 @@ Nothing has been released yet. Everything below is the initial body of work.
   accountability-bearing policy overrides (waivers with bounded time,
   approver and compensating controls), control mappings — and the immutable,
   content-hashed `PolicyBundle` with compile and validate-before-activate.
-- `AshCompliance.Compiler`: fixed layering precedence (non-waivable global >
+- `AshCompliance.Compiler`: default layering precedence (non-waivable global >
   global mandatory > profile refinements > tenant strengthening > approved
-  overrides > tenant supplements), per-layer combining algorithms, waiver
+  overrides > tenant supplements, declarable per scheme), per-layer combining algorithms, waiver
   expiry evaluated against the compile clock, loud refusal of overreach.
 - `AshCompliance.Projector`: evaluator-to-ops translation over
   `ash_events_projections`, finding grain
