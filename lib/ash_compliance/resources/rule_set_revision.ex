@@ -21,6 +21,16 @@ defmodule AshCompliance.Resources.RuleSetRevision do
   Status lifecycle: `draft → validated → approved → active → retired |
   revoked`. Only `:active` revisions participate in compilation.
 
+  ## Revisions under a declared scheme
+
+  `scheme` is `nil` for every revision the default compile reads, and then
+  `layer` is one of the six default ranks, as always. A host that compiles a
+  second slice under its own `AshCompliance.Layering` scheme may record that
+  slice's rule sets here too, naming the scheme module in `scheme`; `layer`
+  is then checked against that scheme's layers instead. The active read
+  answers per scheme (no `scheme` argument: default-scheme revisions only),
+  so the default gather never sees another scheme's rows.
+
   `rules_json` is the serialized `AshRules.Ir.Bundle` JSON; `content_hash` is
   its content hash, so two revisions of the same content are interchangeable.
 
@@ -110,10 +120,14 @@ defmodule AshCompliance.Resources.RuleSetRevision do
     attribute(:name, :string, allow_nil?: false, public?: true)
     attribute(:revision, :string, allow_nil?: false, default: "1", public?: true)
 
-    attribute(:layer, :atom,
-      constraints: [one_of: Layer.layers()],
-      allow_nil?: false,
-      public?: true
+    # One of the six default ranks when `scheme` is nil, else a layer of the
+    # declared scheme: `Validations.LayerInScheme`.
+    attribute(:layer, :atom, allow_nil?: false, public?: true)
+
+    attribute(:scheme, :string,
+      public?: true,
+      description:
+        "The AshCompliance.Layering module this revision belongs to; nil is the default six-rank scheme."
     )
 
     attribute(:combining, :atom,
@@ -167,6 +181,12 @@ defmodule AshCompliance.Resources.RuleSetRevision do
     identity(:one_active_per_name, [:organization_id, :name, :active_key])
   end
 
+  validations do
+    validate({AshCompliance.Resources.RuleSetRevision.Validations.LayerInScheme, []},
+      on: [:create]
+    )
+  end
+
   changes do
     # Every create and update derives the exclusion key from the status it
     # is writing, so the key can never drift from the status that owns it.
@@ -194,6 +214,7 @@ defmodule AshCompliance.Resources.RuleSetRevision do
         :name,
         :revision,
         :layer,
+        :scheme,
         :combining,
         :source_module,
         :rules_json,
@@ -285,6 +306,10 @@ defmodule AshCompliance.Resources.RuleSetRevision do
     read :active_for_organization do
       argument(:organization_id, :uuid, allow_nil?: false)
 
+      # No scheme: the default-scheme revisions only, which is every revision
+      # the default gather has ever read.
+      argument(:scheme, :string)
+
       # The in-force-at-the-read-instant containment read (§1). The
       # temporal layer scopes a plain read to the revision versions whose
       # period contains the read instant; `status == :active` is the
@@ -295,7 +320,8 @@ defmodule AshCompliance.Resources.RuleSetRevision do
       filter(
         expr(
           status == :active and
-            (is_nil(organization_id) or organization_id == ^arg(:organization_id))
+            (is_nil(organization_id) or organization_id == ^arg(:organization_id)) and
+            ((is_nil(^arg(:scheme)) and is_nil(scheme)) or scheme == ^arg(:scheme))
         )
       )
     end

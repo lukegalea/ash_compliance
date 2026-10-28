@@ -16,6 +16,18 @@ Nothing has been released yet. Everything below is the initial body of work.
 
 ### Changed:
 
+- **Bundles and rule sets compiled under a declared scheme can be stored.**
+  `PolicyBundle :compile` takes optional `scheme`, `source` and `context`
+  arguments, passed to `AshCompliance.Compiler.compile/1`, and records the
+  scheme's module name in a new nullable `scheme` column (`nil` is the default
+  scheme; with no new argument the compile call is exactly the old one). A
+  source without its own lineage has the resolution's steps stored as a list.
+  `RuleSetRevision` gains the same `scheme` column; its `layer` is checked
+  against that scheme's layers (the six default ranks when `nil`). The active
+  reads of both answer per scheme (no `scheme` argument: default-scheme rows
+  only), so the default gather and a host projector never see another
+  scheme's rows. Hosts generate a migration for the two columns.
+
 - **Declared layer schemes, scoped contributions, pluggable contribution
   sources; the default six-rank scheme is unchanged.** `AshCompliance.Layering`
   is a behaviour a scheme module implements — ordered layers, per-layer

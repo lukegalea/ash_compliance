@@ -19,6 +19,22 @@ defmodule AshCompliance.Resources.PolicyBundle do
   `AshRules.Ir.decode/1` (full verifiers) before the bundle may go live. A
   bundle that no longer decodes — corrupted, or produced by an incompatible
   compiler — cannot be activated.
+
+  ## Bundles compiled under a declared scheme
+
+  `compile` takes optional `scheme` (an `AshCompliance.Layering` module),
+  `source` (an `AshCompliance.Compiler.ContributionSource` module) and
+  `context` (the resolution context) arguments, passed straight to
+  `AshCompliance.Compiler.compile/1`. Without them the compile is exactly the
+  default one: the six-rank scheme over the database gather, and `scheme`
+  stays `nil`. With a declared scheme the bundle records the scheme module's
+  name in `scheme`, and its `contributions` are the source's lineage (or the
+  resolution's per-rule steps, flattened, when the source declares none).
+
+  The active and latest reads answer per scheme: with no `scheme` argument
+  they read only default-scheme bundles, so a host that compiles a second
+  slice under its own scheme never displaces the bundle its projector
+  evaluates. Pass `scheme` (the module name, as stored) to read that slice's.
   """
 
   use AshCompliance.Resource, table: "policy_bundles"
@@ -51,6 +67,12 @@ defmodule AshCompliance.Resources.PolicyBundle do
 
     attribute(:active_at, :utc_datetime_usec, public?: true)
 
+    attribute(:scheme, :string,
+      public?: true,
+      description:
+        "The AshCompliance.Layering module the bundle was compiled under; nil is the default six-rank scheme."
+    )
+
     timestamps()
   end
 
@@ -65,6 +87,18 @@ defmodule AshCompliance.Resources.PolicyBundle do
       primary?(true)
       accept([:organization_id, :label])
       argument(:now, :utc_datetime_usec)
+
+      argument(:scheme, :module,
+        constraints: [behaviour: AshCompliance.Layering],
+        description: "The layering scheme; absent, the default six-rank scheme."
+      )
+
+      argument(:source, :module,
+        constraints: [behaviour: AshCompliance.Compiler.ContributionSource],
+        description: "The contribution source; absent, the database gather."
+      )
+
+      argument(:context, :map, description: "The resolution context the source and scheme read.")
 
       change(CompileChange)
     end
@@ -97,9 +131,16 @@ defmodule AshCompliance.Resources.PolicyBundle do
 
     read :active_for_organization do
       argument(:organization_id, :uuid, allow_nil?: false)
+      argument(:scheme, :string)
       get?(true)
       prepare(build(sort: [inserted_at: :desc], limit: 1))
-      filter(expr(organization_id == ^arg(:organization_id) and status == :active))
+
+      filter(
+        expr(
+          organization_id == ^arg(:organization_id) and status == :active and
+            ((is_nil(^arg(:scheme)) and is_nil(scheme)) or scheme == ^arg(:scheme))
+        )
+      )
     end
 
     # The most recent bundle regardless of status: the editor's compile →
@@ -107,9 +148,16 @@ defmodule AshCompliance.Resources.PolicyBundle do
     # is no longer in memory and the active read comes back nil.
     read :latest_for_organization do
       argument(:organization_id, :uuid, allow_nil?: false)
+      argument(:scheme, :string)
       get?(true)
       prepare(build(sort: [inserted_at: :desc], limit: 1))
-      filter(expr(organization_id == ^arg(:organization_id)))
+
+      filter(
+        expr(
+          organization_id == ^arg(:organization_id) and
+            ((is_nil(^arg(:scheme)) and is_nil(scheme)) or scheme == ^arg(:scheme))
+        )
+      )
     end
 
     read :decoded do
