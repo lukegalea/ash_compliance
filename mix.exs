@@ -126,7 +126,12 @@ defmodule AshCompliance.MixProject do
       groups_for_modules: [
         "Control plane": [
           ~r/AshCompliance\.Resources/,
-          AshCompliance.Compiler
+          AshCompliance.Compiler,
+          AshCompliance.Compiler.Resolution,
+          AshCompliance.Compiler.ContributionSource,
+          AshCompliance.Compiler.DatabaseSource,
+          AshCompliance.Layering,
+          AshCompliance.Layering.Default
         ],
         "Data plane": [
           AshCompliance.Projector,

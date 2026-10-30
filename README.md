@@ -12,8 +12,9 @@ controls live in a spreadsheet, the enforcement lives in scattered code, and
 the evidence that connects them lives in nobody's memory.
 
 **AshCompliance is the control plane and the data plane, wired together by a
-bundle hash.** Catalogs and profiles compile — through a fixed, non-negotiable
-layering precedence — into immutable, content-hashed `ash_rules` bundles.
+bundle hash.** Catalogs and profiles compile — through a declared layering
+scheme that refuses overreach — into immutable, content-hashed `ash_rules`
+bundles.
 Findings project out of the event log onto per-subject rows. Every evaluation
 is append-only, pinning the bundle revision, the fact snapshot and the
 outcome: the auditor's truth, deliberately distinct from the projection.
@@ -27,10 +28,11 @@ outcome: the auditor's truth, deliberately distinct from the projection.
   effective rule set is a compiled, hash-pinned bundle; findings and
   evaluations reference the exact hash that produced them.
 * **Tenant tailoring must be constrained.** "Each tenant tweaks the rules" is
-  how a baseline dissolves. The layering precedence is fixed — non-waivable
-  global > global mandatory > profile refinements > tenant strengthening >
-  approved replacements/waivers > tenant supplements — and the compiler
-  refuses ad-hoc inheritance, overreach and weakening that outranks nothing.
+  how a baseline dissolves. The layering precedence is declared in code —
+  by default non-waivable global > global mandatory > profile refinements >
+  tenant strengthening > approved replacements/waivers > tenant supplements,
+  or a host's own scheme passed explicitly — and the compiler refuses ad-hoc
+  inheritance, overreach, and "tightening" that is not strictly stronger.
 * **The finding and the decision must differ.** The projection answers "now";
   the `ComplianceEvaluation` record answers "why, with which facts, under
   which bundle". Conflating them is how audit trails die.
@@ -44,7 +46,7 @@ One compiler in the middle, one projector under it, and two artifacts that
 must never be conflated:
 
 ```
-   control plane                        the compile
+   control plane                        the compile (default scheme)
 ┌──────────────────────────────┐
 │ Catalog / Controls           │   non-waivable global
 │ RuleSetRevisions (layers)    │     > global mandatory
@@ -143,9 +145,10 @@ checkpointing and dead-lettering handled by the projector engine.
   `TenantPolicySet`, `PolicyOverride` (waivers with bounded time, approver and
   compensating controls), `ControlMapping`, and the immutable
   `PolicyBundle` with compile and validate-before-activate actions.
-* **The layering compiler** — `AshCompliance.Compiler.compile/1`, fixed
-  precedence, explicit per-layer combining, waiver expiry evaluated against
-  the compile clock.
+* **The layering compiler** — `AshCompliance.Compiler.compile/1` over a
+  declared `AshCompliance.Layering` scheme (six ranks by default), a pure
+  `resolve/3` for scoped "what applies here" reads, explicit combining, and
+  waiver expiry evaluated against the compile clock.
 * **The projector** — `AshCompliance.Projector`, a macro over
   `ash_events_projections` providing the evaluator-to-ops translation; the
   host declares the grain. `Finding` is a ProjectionResource on the
@@ -276,7 +279,7 @@ PGPORT=5435 mix test          # config/test.exs documents DB_HOST/DB_USER/DB_PAS
 - [How it works](documentation/topics/how-it-works.md) — the two planes, the
   bundle lifecycle, the projector flow.
 - [Layering and combining](documentation/topics/layering-and-combining.md) —
-  the fixed precedence, what each layer may and may not do.
+  declared schemes, the default precedence, what each layer may and may not do.
 - [The projector](documentation/topics/the-projector.md) — grain, facts,
   translation, replay determinism.
 - [OSCAL](documentation/topics/oscal.md) — catalog/profile import and export.

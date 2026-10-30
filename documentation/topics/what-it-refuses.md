@@ -76,9 +76,11 @@ suite quotes each refusal.
 
 * **No API layer** — no JSON:API, no GraphQL. Resources, actions, the
   compiler and the projector only; wire exposure is the host's concern.
-* **No ad-hoc inheritance** — there is no API that accepts a custom layer
-  order or a caller-provided rule list; contributions come from resources
-  only.
+* **No ad-hoc inheritance** — there is no API that accepts a runtime layer
+  order. An order is a declared `AshCompliance.Layering` scheme module,
+  passed explicitly; contributions come from a declared
+  `AshCompliance.Compiler.ContributionSource` (by default, the resources),
+  and a contribution's precedence is only ever its declared layer.
 * **No events, no audit semantics of its own** — the event log belongs to
   AshEvents; the finding/evaluation split to the design. This package is the
   compliance layer, not the ledger.

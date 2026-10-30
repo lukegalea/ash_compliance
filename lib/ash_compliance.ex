@@ -11,7 +11,7 @@ defmodule AshCompliance do
     * a **control plane** — catalogs, controls, profiles, waivers, tenant
       policy sets, and rule-set revisions with a lifecycle
       (draft → validated → approved → active → retired/revoked), compiled by
-      `AshCompliance.Compiler` through the fixed layering precedence into
+      `AshCompliance.Compiler` through a declared layering scheme into
       immutable, content-hashed `AshRules.Ir.Bundle` snapshots
       (`AshCompliance.Resources.PolicyBundle`);
     * a **data plane** — findings projected from the event log through
