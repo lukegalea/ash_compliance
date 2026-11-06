@@ -14,6 +14,8 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 Nothing has been released yet. Everything below is the initial body of work.
 
+Requires Elixir 1.20 or later.
+
 ### Changed:
 
 - **Bundles and rule sets compiled under a declared scheme can be stored.**
