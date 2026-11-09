@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 defmodule AshCompliance.Boundary.Environment do
-  @moduledoc "An environment a boundary declaration names: audited, or excluded under a data ceiling."
+  @moduledoc "An environment a declaration names: production, or non-production under a data ceiling."
 
   defstruct [
     :name,

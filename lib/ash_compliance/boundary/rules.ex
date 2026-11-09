@@ -3,38 +3,48 @@
 
 defmodule AshCompliance.Boundary.Rules do
   @moduledoc """
-  The checks a boundary declaration must pass to compile.
+  The checks the environments and resources of a declaration must pass to
+  compile.
 
-  A control is satisfied only by a resource declared in an audited
-  environment. A resource in an excluded environment never satisfies one, and
-  a reference to an undeclared resource satisfies nothing. A declaration that
-  fails any rule does not compile.
+  An environment is `:production`, or `:non_production` under a data ceiling.
+  A declaration that fails any rule does not compile.
   """
 
-  alias AshCompliance.Boundary.{Control, Environment, Resource}
+  alias AshCompliance.Boundary.{Environment, Resource}
 
   @type declaration :: %{
           name: term(),
           environments: [Environment.t()],
-          resources: [Resource.t()],
-          controls: [Control.t()]
+          resources: [Resource.t()]
         }
 
   @doc "Every violation, as a message. An empty list means the declaration passes."
   @spec violations(declaration()) :: [String.t()]
   def violations(%{} = decl) do
     envs = Map.new(decl.environments, &{&1.name, &1})
-    resources = Map.new(decl.resources, &{&1.name, &1})
 
     Enum.concat([
       boundary_name(decl.name),
       duplicates("environment", Enum.map(decl.environments, & &1.name)),
       duplicates("resource", Enum.map(decl.resources, & &1.name)),
-      duplicates("control", Enum.map(decl.controls, & &1.criterion)),
       Enum.flat_map(decl.environments, &environment/1),
-      Enum.flat_map(decl.resources, &resource(&1, envs)),
-      Enum.flat_map(decl.controls, &control(&1, resources, envs))
+      Enum.flat_map(decl.resources, &resource(&1, envs))
     ])
+  end
+
+  @doc "True when `value` is nil, not a string, or only whitespace."
+  @spec blank?(term()) :: boolean()
+  def blank?(value) when is_binary(value), do: String.trim(value) == ""
+  def blank?(_), do: true
+
+  @doc "Duplicate-name messages for `kind`, sorted."
+  @spec duplicates(String.t(), [term()]) :: [String.t()]
+  def duplicates(kind, names) do
+    names
+    |> Enum.frequencies()
+    |> Enum.filter(fn {_, n} -> n > 1 end)
+    |> Enum.map(fn {name, _} -> "#{kind} #{inspect(name)} is declared more than once" end)
+    |> Enum.sort()
   end
 
   defp boundary_name(name) when is_binary(name) do
@@ -43,25 +53,25 @@ defmodule AshCompliance.Boundary.Rules do
 
   defp boundary_name(_), do: ["the boundary needs a non-blank name"]
 
-  defp duplicates(kind, names) do
-    names
-    |> Enum.frequencies()
-    |> Enum.filter(fn {_, n} -> n > 1 end)
-    |> Enum.map(fn {name, _} -> "#{kind} #{inspect(name)} is declared more than once" end)
-    |> Enum.sort()
-  end
-
   defp environment(%Environment{} = env) do
-    ceiling_problem(env) ++ zone_problem(env.name, env.zone)
+    class_problem(env) ++ ceiling_problem(env) ++ zone_problem(env.name, env.zone)
   end
 
-  defp ceiling_problem(%Environment{class: :excluded, data_ceiling: nil, name: name}),
-    do: ["excluded environment #{inspect(name)} has no data ceiling"]
+  defp class_problem(%Environment{class: class}) when class in [:production, :non_production],
+    do: []
 
-  defp ceiling_problem(%Environment{class: :audited, data_ceiling: ceiling, name: name})
+  defp class_problem(%Environment{class: class, name: name}),
+    do: [
+      "environment #{inspect(name)} has class #{inspect(class)}; it must be :production or :non_production"
+    ]
+
+  defp ceiling_problem(%Environment{class: :non_production, data_ceiling: nil, name: name}),
+    do: ["non-production environment #{inspect(name)} has no data ceiling"]
+
+  defp ceiling_problem(%Environment{class: :production, data_ceiling: ceiling, name: name})
        when not is_nil(ceiling),
        do: [
-         "audited environment #{inspect(name)} declares a data ceiling; only an excluded one has one"
+         "production environment #{inspect(name)} declares a data ceiling; only a non-production one has one"
        ]
 
   defp ceiling_problem(_), do: []
@@ -105,41 +115,4 @@ defmodule AshCompliance.Boundary.Rules do
 
   defp attribute_problems(%Resource{name: name}),
     do: ["resource #{inspect(name)} attributes must be a map"]
-
-  defp control(%Control{} = c, resources, envs) do
-    undeclared =
-      c.resources
-      |> Enum.reject(&Map.has_key?(resources, &1))
-      |> Enum.map(
-        &"control #{inspect(c.criterion)} references undeclared resource #{inspect(&1)}"
-      )
-
-    satisfying =
-      Enum.filter(c.resources, fn name ->
-        with %Resource{environment: env} <- Map.get(resources, name),
-             %Environment{class: :audited} <- Map.get(envs, env) do
-          true
-        else
-          _ -> false
-        end
-      end)
-
-    no_resource =
-      if satisfying == [],
-        do: ["control #{inspect(c.criterion)} has no resource in an audited environment"],
-        else: []
-
-    evidence =
-      if c.evidence == [] or Enum.any?(c.evidence, &(not is_binary(&1) or blank?(&1))),
-        do: ["control #{inspect(c.criterion)} needs at least one non-blank evidence reference"],
-        else: []
-
-    criterion =
-      if blank?(c.criterion), do: ["a control has a blank criterion"], else: []
-
-    criterion ++ undeclared ++ no_resource ++ evidence
-  end
-
-  defp blank?(value) when is_binary(value), do: String.trim(value) == ""
-  defp blank?(_), do: true
 end

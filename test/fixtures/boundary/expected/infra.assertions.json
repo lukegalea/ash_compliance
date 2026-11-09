@@ -18,7 +18,7 @@
       "id": "resource.preview.preview_app",
       "kind": "resource_present",
       "resource": "preview_app",
-      "type": "fly_app"
+      "type": "compute_app"
     },
     {
       "attributes": {
@@ -49,5 +49,5 @@
     }
   ],
   "boundary": "fixture-host",
-  "schema": "ash_compliance.boundary.assertions/1"
+  "schema": "boundary.assertions/1"
 }

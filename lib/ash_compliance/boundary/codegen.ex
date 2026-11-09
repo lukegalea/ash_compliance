@@ -3,7 +3,10 @@
 
 defmodule AshCompliance.Boundary.Codegen do
   @moduledoc """
-  Writes, or checks, the files generated from boundary declarations.
+  Writes, or checks, the files generated from declarations.
+
+  The files come from `AshCompliance.Boundary.GeneratedFiles`: every
+  extension a declaration uses contributes its own.
 
   The generated files are the snapshot: a check renders each declaration in
   memory and compares it with what is on disk. Any file that is missing or
@@ -11,7 +14,7 @@ defmodule AshCompliance.Boundary.Codegen do
   compared.
   """
 
-  alias AshCompliance.Boundary.{Info, Render}
+  alias AshCompliance.Boundary.{GeneratedFiles, Info}
 
   @type opts :: [check: boolean(), dry_run: boolean(), output_dir: String.t() | nil]
 
@@ -19,7 +22,7 @@ defmodule AshCompliance.Boundary.Codegen do
   @spec run(module(), opts()) :: [String.t()]
   def run(module, opts \\ []) do
     dir = Keyword.get(opts, :output_dir) || Info.output_dir(module)
-    files = module |> Info.declaration() |> Render.files()
+    files = GeneratedFiles.files(module)
 
     pending =
       files
@@ -48,7 +51,7 @@ defmodule AshCompliance.Boundary.Codegen do
     end
   end
 
-  @doc "Every boundary declaration compiled into the current project's applications."
+  @doc "Every declaration compiled into the current project's applications."
   @spec discover() :: [module()]
   def discover do
     apps =

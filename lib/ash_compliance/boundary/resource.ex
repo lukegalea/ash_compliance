@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 defmodule AshCompliance.Boundary.Resource do
-  @moduledoc "A resource a boundary declaration names: one the host manages, or a data source it only reads."
+  @moduledoc "A resource a declaration names: one the host manages, or a data source it only reads."
 
   defstruct [
     :name,

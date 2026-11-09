@@ -286,8 +286,9 @@ PGPORT=5435 mix test          # config/test.exs documents DB_HOST/DB_USER/DB_PAS
 - [Ownership and freshness](documentation/topics/ownership-and-freshness.md) — the
   criteria catalogue, the control-file schema, `mix ash_compliance.controls.check`,
   the evidence writer and the freshness worker.
-- [The boundary declaration](documentation/topics/boundary.md) — environments,
-  resources and control links, and the JSON generated and gated by `mix ash.codegen`.
+- [The boundary declaration](documentation/topics/boundary.md) — production
+  environments and resources, the separate controls that read them, and the JSON generated
+  and gated by `mix ash.codegen`.
 - [Operator processes and access reviews](documentation/topics/operator-processes.md) —
   the BPMN and DMN templates, separation of duties, completion evidence, overdue
   findings and the access review campaign.

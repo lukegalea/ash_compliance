@@ -3,63 +3,92 @@
 
 defmodule AshCompliance.Boundary do
   @moduledoc """
-  A Spark extension that declares an audit boundary and generates the files
-  that carry it into infrastructure code and an auditor's view.
+  A Spark extension that declares environments and the resources in them, and
+  generates the files that carry them into infrastructure code.
 
-  A declaration has four parts.
+  Use it on its own:
+
+      defmodule MyHost.Boundary do
+        use AshCompliance.Boundary.Production
+
+        boundary do
+          name "my-host"
+        end
+
+        environments do
+          environment :production do
+            class :production
+            zone "zone-a"
+          end
+
+          environment :preview do
+            class :non_production
+            data_ceiling :synthetic
+          end
+        end
+
+        resources do
+          resource :load_balancer do
+            environment :production
+            kind :managed
+            type "lb"
+          end
+        end
+      end
+
+  A declaration has three parts.
 
     * `boundary` - a `name`, and the `output_dir` the files are written to
       (default `priv/boundary`).
-    * `environments` - each `environment` is `:audited`, or `:excluded` under
-      a `data_ceiling` (`:synthetic` or `:pseudonymised`). An environment may
-      name a `zone` by id. The zone is only a reference: this extension
-      defines no zone and checks nothing about it beyond its being a
-      non-blank id.
+    * `environments` - each `environment` is `:production`, or
+      `:non_production` under a `data_ceiling` (`:synthetic` or
+      `:pseudonymised`). An environment may name a `zone` by id. The zone is
+      only a reference: this extension defines no zone and checks nothing
+      about it beyond its being a non-blank id.
     * `resources` - each `resource` sits in one environment and is `:managed`
       (the host provisions it, so it has a `type` and optional expected
       `attributes`) or a `:data_source` (read, not provisioned).
-    * `controls` - each `control` links a criterion to the `resources` that
-      carry it and the `evidence` references that would prove it.
 
-  A declaration that does not compile is refused: a control with no resource
-  in an audited environment, a control or resource that names something
-  undeclared, an excluded environment with no data ceiling, an audited one
-  with a ceiling, duplicate names, a managed resource with no type, or a
-  control with no evidence reference. A resource in an excluded environment
-  never satisfies a control.
+  A declaration that does not compile is refused: a non-production
+  environment with no data ceiling, a production one with a ceiling, a
+  resource in an undeclared environment, duplicate names, or a managed
+  resource with no type.
 
   ## Generated files
 
   Deterministic JSON, sorted and independent of declaration order:
 
-    * `control-map.json` - each criterion, its resources and its evidence
-      references, in state `owned`.
     * `boundary.auto.tfvars.json` - environments, managed resources, data
       sources and zones, as Terraform-style variables.
     * `infra.assertions.json` - what an applied-state check should find.
     * `boundary.snapshot.json` - the normalised declaration, so a changed
       declaration shows up as a diff.
 
-  `owned` says a declaration names who carries the control. It does not say
-  the control operates or has evidence; that is for the evidence evaluator.
-
   ## Codegen
 
   `mix ash.codegen` finds every declaration in the project and writes its
-  files. `mix ash.codegen --check` fails when any file is missing or stale,
-  and `--dry-run` prints what would change. Calling `codegen/1` directly also
-  takes `--boundary Module` (repeatable, in place of discovery) and
-  `--output-dir DIR` (with exactly one `--boundary`); `mix ash.codegen` cannot
-  pass them, because AshPostgres rejects unknown flags.
+  files, including those of any other extension the declaration uses (see
+  `AshCompliance.Boundary.GeneratedFiles`). `mix ash.codegen --check` fails
+  when any file is missing or stale, and `--dry-run` prints what would
+  change. Calling `codegen/1` directly also takes `--boundary Module`
+  (repeatable, in place of discovery) and `--output-dir DIR` (with exactly
+  one `--boundary`); `mix ash.codegen` cannot pass them, because AshPostgres
+  rejects unknown flags.
   """
 
-  alias AshCompliance.Boundary.{Codegen, Control, Environment, Resource}
+  alias AshCompliance.Boundary.{Codegen, Environment, Render, Resource}
+
+  @behaviour AshCompliance.Boundary.GeneratedFiles
 
   @boundary %Spark.Dsl.Section{
     name: :boundary,
-    describe: "Names the boundary and says where its files are written.",
+    describe: "Names the declaration and says where its files are written.",
     schema: [
-      name: [type: :string, required: true, doc: "The boundary's name, carried into every file."],
+      name: [
+        type: :string,
+        required: true,
+        doc: "The declaration's name, carried into every file."
+      ],
       output_dir: [
         type: :string,
         default: "priv/boundary",
@@ -70,16 +99,17 @@ defmodule AshCompliance.Boundary do
 
   @environment %Spark.Dsl.Entity{
     name: :environment,
-    describe: "An environment: audited, or excluded under a data ceiling.",
+    describe: "An environment: production, or non-production under a data ceiling.",
     target: Environment,
     args: [:name],
     identifier: :name,
     schema: [
       name: [type: :atom, required: true],
-      class: [type: {:one_of, [:audited, :excluded]}, required: true],
+      class: [type: {:one_of, [:production, :non_production]}, required: true],
       data_ceiling: [
         type: {:one_of, [:synthetic, :pseudonymised]},
-        doc: "The most sensitive data an excluded environment may hold. Required when excluded."
+        doc:
+          "The most sensitive data a non-production environment may hold. Required when non-production, forbidden when production."
       ],
       zone: [type: :string, doc: "A data-residency zone id, held by reference."],
       description: [type: :string]
@@ -106,29 +136,20 @@ defmodule AshCompliance.Boundary do
     ]
   }
 
-  @control %Spark.Dsl.Entity{
-    name: :control,
-    describe: "Links a criterion to its resources and evidence references.",
-    target: Control,
-    args: [:criterion],
-    identifier: :criterion,
-    schema: [
-      criterion: [type: :string, required: true],
-      resources: [type: {:list, :atom}, required: true],
-      evidence: [type: {:list, :string}, required: true]
-    ]
-  }
-
   @environments %Spark.Dsl.Section{name: :environments, entities: [@environment]}
   @resources %Spark.Dsl.Section{name: :resources, entities: [@resource]}
-  @controls %Spark.Dsl.Section{name: :controls, entities: [@control]}
 
   use Spark.Dsl.Extension,
-    sections: [@boundary, @environments, @resources, @controls],
+    sections: [@boundary, @environments, @resources],
     transformers: [AshCompliance.Boundary.Transformers.EnforceRules]
 
   @doc false
   def name, do: "AshCompliance.Boundary"
+
+  @impl AshCompliance.Boundary.GeneratedFiles
+  def generated_files(module) do
+    module |> AshCompliance.Boundary.Info.declaration() |> Render.files()
+  end
 
   @doc """
   The `mix ash.codegen` hook. Raises `Ash.Error.Framework.PendingCodegen`

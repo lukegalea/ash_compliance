@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 defmodule AshCompliance.Boundary.Info do
-  @moduledoc "Introspection for modules that `use AshCompliance.Boundary.Declaration`."
+  @moduledoc "Introspection for modules that declare environments and resources with `AshCompliance.Boundary`."
 
   alias Spark.Dsl.Extension
 
@@ -13,8 +13,7 @@ defmodule AshCompliance.Boundary.Info do
       name: name(module),
       output_dir: output_dir(module),
       environments: sort_by(environments(module), & &1.name),
-      resources: sort_by(resources(module), & &1.name),
-      controls: sort_by(controls(module), & &1.criterion)
+      resources: sort_by(resources(module), & &1.name)
     }
   end
 
@@ -30,10 +29,7 @@ defmodule AshCompliance.Boundary.Info do
   @spec resources(module()) :: [AshCompliance.Boundary.Resource.t()]
   def resources(module), do: Extension.get_entities(module, [:resources])
 
-  @spec controls(module()) :: [AshCompliance.Boundary.Control.t()]
-  def controls(module), do: Extension.get_entities(module, [:controls])
-
-  @doc "True when `module` is a boundary declaration."
+  @doc "True when `module` declares environments and resources."
   @spec declaration?(module()) :: boolean()
   def declaration?(module) do
     Code.ensure_loaded?(module) and function_exported?(module, :spark_dsl_config, 0) and

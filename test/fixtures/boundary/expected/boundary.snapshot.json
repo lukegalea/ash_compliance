@@ -1,42 +1,20 @@
 {
   "boundary": "fixture-host",
-  "controls": [
-    {
-      "criterion": "CC6.1",
-      "evidence": [
-        "access-listing.daily"
-      ],
-      "resources": [
-        "app_database",
-        "identity_provider"
-      ]
-    },
-    {
-      "criterion": "CC6.6",
-      "evidence": [
-        "config:alb-https",
-        "infra.verify:tls_listener"
-      ],
-      "resources": [
-        "load_balancer"
-      ]
-    }
-  ],
   "environments": [
     {
-      "class": "excluded",
+      "class": "non_production",
       "data_ceiling": "synthetic",
       "name": "preview",
       "zone": null
     },
     {
-      "class": "audited",
+      "class": "production",
       "data_ceiling": null,
       "name": "production",
       "zone": "zone-a"
     },
     {
-      "class": "excluded",
+      "class": "non_production",
       "data_ceiling": "pseudonymised",
       "name": "staging",
       "zone": null
@@ -74,8 +52,8 @@
       "environment": "preview",
       "kind": "managed",
       "name": "preview_app",
-      "type": "fly_app"
+      "type": "compute_app"
     }
   ],
-  "schema": "ash_compliance.boundary.snapshot/1"
+  "schema": "boundary.snapshot/1"
 }
