@@ -3,7 +3,7 @@
 
 defmodule AshCompliance.ScopeSchemeResolveTest do
   @moduledoc """
-  A five-layer SCOPE scheme (ours > pmc > property_group > contract > job)
+  A five-layer SCOPE scheme (ours > client > property_group > contract > job)
   through the pure `Compiler.resolve/3`: origin layer, lineage order, strictly
   stronger tightening, removal that narrows below and never above, and scope
   filtering. Plus a property test that the default scheme's precedence and
@@ -30,7 +30,7 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
     def layers do
       [
         [name: :ours, ops: [:add]],
-        [name: :pmc, ops: @edits, scope_key: :pmc],
+        [name: :client, ops: @edits, scope_key: :client],
         [name: :property_group, ops: @edits, scope_key: :property_group],
         [name: :contract, ops: @edits, scope_key: :contract],
         [name: :job, ops: @edits, scope_key: :job]
@@ -104,7 +104,7 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
     setup do
       contributions = [
         ours_gl(),
-        tighten(:pmc, %{pmc: "pmc-1"}, 2_000_000, "pmc-edit"),
+        tighten(:client, %{client: "client-1"}, 2_000_000, "client-edit"),
         tighten(:job, %{job: "job-1"}, 5_000_000, "job-edit")
       ]
 
@@ -113,7 +113,8 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
 
     test "origin layer is :ours; lineage has all three edits in order; threshold is the strongest",
          %{contributions: contributions} do
-      resolution = Compiler.resolve(contributions, ScopeLayers, %{pmc: "pmc-1", job: "job-1"})
+      resolution =
+        Compiler.resolve(contributions, ScopeLayers, %{client: "client-1", job: "job-1"})
 
       assert Resolution.ok?(resolution)
 
@@ -125,8 +126,8 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
 
       lineage = resolution.lineage[@gl]
       assert [:add, :tighten, :tighten] == Enum.map(lineage, & &1.op)
-      assert [:ours, :pmc, :job] == Enum.map(lineage, & &1.layer)
-      assert ["ours-gl", "pmc-edit", "job-edit"] == Enum.map(lineage, & &1.source_id)
+      assert [:ours, :client, :job] == Enum.map(lineage, & &1.layer)
+      assert ["ours-gl", "client-edit", "job-edit"] == Enum.map(lineage, & &1.source_id)
       assert [1_000_000, 2_000_000, 5_000_000] == Enum.map(lineage, & &1.params.min_amount)
 
       assert threshold(resolution) == 5_000_000
@@ -135,9 +136,11 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
 
     test "each context sees only the edits at or outside its own scope", %{contributions: c} do
       assert c |> Compiler.resolve(ScopeLayers, %{}) |> threshold() == 1_000_000
-      assert c |> Compiler.resolve(ScopeLayers, %{pmc: "pmc-1"}) |> threshold() == 2_000_000
+      assert c |> Compiler.resolve(ScopeLayers, %{client: "client-1"}) |> threshold() == 2_000_000
 
-      assert c |> Compiler.resolve(ScopeLayers, %{pmc: "pmc-1", job: "job-1"}) |> threshold() ==
+      assert c
+             |> Compiler.resolve(ScopeLayers, %{client: "client-1", job: "job-1"})
+             |> threshold() ==
                5_000_000
     end
 
@@ -147,7 +150,7 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
       weaker = tighten(:contract, %{contract: "c-1"}, 1_500_000, "contract-weaker")
 
       resolution =
-        Compiler.resolve(c ++ [weaker], ScopeLayers, %{pmc: "pmc-1", contract: "c-1"})
+        Compiler.resolve(c ++ [weaker], ScopeLayers, %{client: "client-1", contract: "c-1"})
 
       assert [refusal] = resolution.refusals
       assert refusal.reason == :not_stronger
@@ -165,7 +168,10 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
 
     test "an equal tighten is refused too (equal is never stronger)", %{contributions: c} do
       equal = tighten(:contract, %{contract: "c-1"}, 2_000_000, "contract-equal")
-      resolution = Compiler.resolve(c ++ [equal], ScopeLayers, %{pmc: "pmc-1", contract: "c-1"})
+
+      resolution =
+        Compiler.resolve(c ++ [equal], ScopeLayers, %{client: "client-1", contract: "c-1"})
+
       assert [%{reason: :not_stronger, source_id: "contract-equal"}] = resolution.refusals
     end
   end
@@ -182,7 +188,7 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
 
     test "a context inside the group drops the line", %{contributions: c} do
       resolution =
-        Compiler.resolve(c, ScopeLayers, %{pmc: "pmc-1", property_group: ["g-1", "g-9"]})
+        Compiler.resolve(c, ScopeLayers, %{client: "client-1", property_group: ["g-1", "g-9"]})
 
       assert Resolution.ok?(resolution)
       assert ids(resolution) == [@gl]
@@ -191,8 +197,8 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
                resolution.excluded
     end
 
-    test "a PMC-only context keeps the line", %{contributions: c} do
-      resolution = Compiler.resolve(c, ScopeLayers, %{pmc: "pmc-1"})
+    test "a client-only context keeps the line", %{contributions: c} do
+      resolution = Compiler.resolve(c, ScopeLayers, %{client: "client-1"})
 
       assert Resolution.ok?(resolution)
       assert ids(resolution) == [@gl, @wsib]
@@ -214,7 +220,7 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
         tighten(:job, %{job: "other-job"}, 9_500_000, "other-job-edit")
       ]
 
-      context = %{pmc: "pmc-1", property_group: "g-1", contract: "c-1", job: "j-1"}
+      context = %{client: "client-1", property_group: "g-1", contract: "c-1", job: "j-1"}
       resolution = Compiler.resolve(contributions, ScopeLayers, context)
 
       assert Resolution.ok?(resolution)
@@ -227,7 +233,7 @@ defmodule AshCompliance.ScopeSchemeResolveTest do
 
     test "a scope key missing from the context does not match" do
       contributions = [ours_gl(), tighten(:job, %{job: "j-1"}, 9_000_000, "job-edit")]
-      resolution = Compiler.resolve(contributions, ScopeLayers, %{pmc: "pmc-1"})
+      resolution = Compiler.resolve(contributions, ScopeLayers, %{client: "client-1"})
       assert threshold(resolution) == 1_000_000
     end
 

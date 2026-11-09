@@ -26,7 +26,7 @@ defmodule AshCompliance.DeclaredSchemeResolveTest do
     def layers do
       [
         [name: :ours, ops: [:add]],
-        [name: :pmc, ops: @edits, scope_key: :pmc],
+        [name: :client, ops: @edits, scope_key: :client],
         [name: :property_group, ops: @edits, scope_key: :property_group],
         [name: :contract, ops: @edits, scope_key: :contract],
         [name: :job, ops: @edits, scope_key: :job]
@@ -34,7 +34,7 @@ defmodule AshCompliance.DeclaredSchemeResolveTest do
     end
   end
 
-  @pmc "pmc-1"
+  @client "client-1"
   @group "group-1"
   @job "job-1"
 
@@ -72,11 +72,11 @@ defmodule AshCompliance.DeclaredSchemeResolveTest do
       %{layer: :ours, rule: wsib_rule(), source_id: "ours"},
       %{
         op: :tighten,
-        layer: :pmc,
+        layer: :client,
         rule_id: "req.general_liability",
         params: %{min_amount: 2_000_000},
-        scope: %{pmc: @pmc},
-        source_id: "pmc-edit"
+        scope: %{client: @client},
+        source_id: "client-edit"
       },
       %{
         op: :exclude,
@@ -107,13 +107,13 @@ defmodule AshCompliance.DeclaredSchemeResolveTest do
     assert threshold(ours) == 1_000_000
     assert "req.wsib" in Enum.map(ours.rules, & &1.id)
 
-    pmc = Compiler.resolve(baseline(), ScopeLayers, %{pmc: @pmc})
-    assert threshold(pmc) == 2_000_000
-    assert "req.wsib" in Enum.map(pmc.rules, & &1.id)
+    client = Compiler.resolve(baseline(), ScopeLayers, %{client: @client})
+    assert threshold(client) == 2_000_000
+    assert "req.wsib" in Enum.map(client.rules, & &1.id)
 
     job =
       Compiler.resolve(baseline(), ScopeLayers, %{
-        pmc: @pmc,
+        client: @client,
         property_group: [@group, "group-2"],
         job: @job
       })
@@ -127,7 +127,7 @@ defmodule AshCompliance.DeclaredSchemeResolveTest do
     assert [:add, :tighten, :tighten] ==
              Enum.map(job.lineage["req.general_liability"], & &1.op)
 
-    assert ["ours", "pmc-edit", "job-edit"] ==
+    assert ["ours", "client-edit", "job-edit"] ==
              Enum.map(job.lineage["req.general_liability"], & &1.source_id)
   end
 
@@ -145,7 +145,7 @@ defmodule AshCompliance.DeclaredSchemeResolveTest do
           }
         ]
 
-    resolution = Compiler.resolve(contributions, ScopeLayers, %{pmc: @pmc, contract: "c-1"})
+    resolution = Compiler.resolve(contributions, ScopeLayers, %{client: @client, contract: "c-1"})
 
     assert [%{reason: :not_stronger, layer: :contract, source_id: "contract-edit"}] =
              resolution.refusals
@@ -163,13 +163,13 @@ defmodule AshCompliance.DeclaredSchemeResolveTest do
   end
 
   test "the bound threshold is part of the bundle hash" do
-    pmc = Compiler.resolve(baseline(), ScopeLayers, %{pmc: @pmc})
-    job = Compiler.resolve(baseline(), ScopeLayers, %{pmc: @pmc, job: @job})
+    client = Compiler.resolve(baseline(), ScopeLayers, %{client: @client})
+    job = Compiler.resolve(baseline(), ScopeLayers, %{client: @client, job: @job})
 
     schema = AshRules.Ir.FactSchema.new([])
     hash = fn resolution -> AshRules.Ir.Bundle.new(resolution.rules, schema).content_hash end
 
-    refute hash.(pmc) == hash.(job)
+    refute hash.(client) == hash.(job)
   end
 
   test "an inner layer may not re-declare an outer rule differently" do

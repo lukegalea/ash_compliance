@@ -21,7 +21,7 @@ defmodule AshCompliance.Layering do
         def layers do
           [
             [name: :ours, ops: [:add]],
-            [name: :pmc, ops: [:add, tighten: :any, exclude: :any], scope_key: :pmc],
+            [name: :client, ops: [:add, tighten: :any, exclude: :any], scope_key: :client],
             [name: :job, ops: [:add, tighten: :any, exclude: :any], scope_key: :job]
           ]
         end
@@ -116,7 +116,7 @@ defmodule AshCompliance.Layering do
   @typedoc "Where a contribution applies. `nil` or `%{}` applies everywhere."
   @type scope() :: %{optional(atom()) => term()} | nil
 
-  @typedoc "What a resolution is for: e.g. `%{pmc: id, property_group: [ids], job: id}`."
+  @typedoc "What a resolution is for: e.g. `%{client: id, property_group: [ids], job: id}`."
   @type context() :: %{optional(atom()) => term()}
 
   @typedoc "How a param's strength is ordered."
