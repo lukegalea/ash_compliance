@@ -16,6 +16,14 @@ Nothing has been released yet. Everything below is the initial body of work.
 
 Requires Elixir 1.20 or later.
 
+### Added:
+
+- SOC 2 ownership contract: the 61 Trust Services Criteria as data, a control-file
+  schema (`"criteria"` rows), `mix ash_compliance.controls.check`, an append-only
+  evidence writer for `EvidenceArtifact`, a pure freshness evaluator, and the
+  `AshCompliance.Workers.EvidenceFreshness` Oban worker. Stale or missing evidence is
+  `:unknown` and raises a finding; only an approved, expiring waiver silences it.
+
 ### Changed:
 
 - **Bundles and rule sets compiled under a declared scheme can be stored.**

@@ -283,6 +283,9 @@ PGPORT=5435 mix test          # config/test.exs documents DB_HOST/DB_USER/DB_PAS
 - [The projector](documentation/topics/the-projector.md) — grain, facts,
   translation, replay determinism.
 - [OSCAL](documentation/topics/oscal.md) — catalog/profile import and export.
+- [Ownership and freshness](documentation/topics/ownership-and-freshness.md) — the
+  criteria catalogue, the control-file schema, `mix ash_compliance.controls.check`,
+  the evidence writer and the freshness worker.
 - [What it refuses](documentation/topics/what-it-refuses.md) — the compile
   and admission refusals, verbatim.
 
