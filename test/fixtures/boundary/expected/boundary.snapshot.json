@@ -1,0 +1,81 @@
+{
+  "boundary": "fixture-host",
+  "controls": [
+    {
+      "criterion": "CC6.1",
+      "evidence": [
+        "access-listing.daily"
+      ],
+      "resources": [
+        "app_database",
+        "identity_provider"
+      ]
+    },
+    {
+      "criterion": "CC6.6",
+      "evidence": [
+        "config:alb-https",
+        "infra.verify:tls_listener"
+      ],
+      "resources": [
+        "load_balancer"
+      ]
+    }
+  ],
+  "environments": [
+    {
+      "class": "excluded",
+      "data_ceiling": "synthetic",
+      "name": "preview",
+      "zone": null
+    },
+    {
+      "class": "audited",
+      "data_ceiling": null,
+      "name": "production",
+      "zone": "zone-a"
+    },
+    {
+      "class": "excluded",
+      "data_ceiling": "pseudonymised",
+      "name": "staging",
+      "zone": null
+    }
+  ],
+  "resources": [
+    {
+      "attributes": {
+        "storage_encrypted": true
+      },
+      "environment": "production",
+      "kind": "managed",
+      "name": "app_database",
+      "type": "aws_db_instance"
+    },
+    {
+      "attributes": {},
+      "environment": "production",
+      "kind": "data_source",
+      "name": "identity_provider",
+      "type": null
+    },
+    {
+      "attributes": {
+        "internal": false,
+        "protocol": "HTTPS"
+      },
+      "environment": "production",
+      "kind": "managed",
+      "name": "load_balancer",
+      "type": "aws_lb"
+    },
+    {
+      "attributes": {},
+      "environment": "preview",
+      "kind": "managed",
+      "name": "preview_app",
+      "type": "fly_app"
+    }
+  ],
+  "schema": "ash_compliance.boundary.snapshot/1"
+}

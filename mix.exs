@@ -118,6 +118,7 @@ defmodule AshCompliance.MixProject do
         "documentation/topics/the-projector.md",
         "documentation/topics/oscal.md",
         "documentation/topics/ownership-and-freshness.md",
+        "documentation/topics/boundary.md",
         "documentation/topics/what-it-refuses.md",
         "CHANGELOG.md"
       ],
@@ -144,6 +145,7 @@ defmodule AshCompliance.MixProject do
           AshCompliance.Status,
           AshCompliance.FactBuilder
         ],
+        Boundary: [~r/AshCompliance\.Boundary/],
         Ownership: [
           ~r/AshCompliance\.Ownership/,
           AshCompliance.Workers.EvidenceFreshness

@@ -1,0 +1,53 @@
+{
+  "assertions": [
+    {
+      "ceiling": "synthetic",
+      "environment": "preview",
+      "id": "environment.preview.data_ceiling",
+      "kind": "data_ceiling"
+    },
+    {
+      "ceiling": "pseudonymised",
+      "environment": "staging",
+      "id": "environment.staging.data_ceiling",
+      "kind": "data_ceiling"
+    },
+    {
+      "attributes": {},
+      "environment": "preview",
+      "id": "resource.preview.preview_app",
+      "kind": "resource_present",
+      "resource": "preview_app",
+      "type": "fly_app"
+    },
+    {
+      "attributes": {
+        "storage_encrypted": true
+      },
+      "environment": "production",
+      "id": "resource.production.app_database",
+      "kind": "resource_present",
+      "resource": "app_database",
+      "type": "aws_db_instance"
+    },
+    {
+      "environment": "production",
+      "id": "resource.production.identity_provider",
+      "kind": "data_source_declared",
+      "resource": "identity_provider"
+    },
+    {
+      "attributes": {
+        "internal": false,
+        "protocol": "HTTPS"
+      },
+      "environment": "production",
+      "id": "resource.production.load_balancer",
+      "kind": "resource_present",
+      "resource": "load_balancer",
+      "type": "aws_lb"
+    }
+  ],
+  "boundary": "fixture-host",
+  "schema": "ash_compliance.boundary.assertions/1"
+}
