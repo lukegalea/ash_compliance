@@ -1,0 +1,40 @@
+{
+  "boundary": "fixture-host",
+  "controls": [
+    {
+      "criterion": "CC6.1",
+      "evidence": [
+        "access-listing.daily"
+      ],
+      "resources": [
+        {
+          "environment": "production",
+          "kind": "managed",
+          "name": "app_database"
+        },
+        {
+          "environment": "production",
+          "kind": "data_source",
+          "name": "identity_provider"
+        }
+      ],
+      "state": "owned"
+    },
+    {
+      "criterion": "CC6.6",
+      "evidence": [
+        "config:alb-https",
+        "infra.verify:tls_listener"
+      ],
+      "resources": [
+        {
+          "environment": "production",
+          "kind": "managed",
+          "name": "load_balancer"
+        }
+      ],
+      "state": "owned"
+    }
+  ],
+  "schema": "ash_compliance.boundary.control-map/1"
+}
