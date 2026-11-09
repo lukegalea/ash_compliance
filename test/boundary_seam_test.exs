@@ -252,8 +252,10 @@ defmodule AshCompliance.BoundarySeamTest do
     defp production_files do
       (Path.wildcard("lib/ash_compliance/boundary*.ex") ++
          Path.wildcard("lib/ash_compliance/boundary/**/*.ex"))
-      |> Enum.reject(&(&1 == "lib/ash_compliance/boundary/controls.ex"))
-      |> Enum.reject(&String.starts_with?(&1, "lib/ash_compliance/boundary/controls/"))
+      |> Enum.reject(
+        &(&1 == "lib/ash_compliance/boundary/controls.ex" or
+            String.starts_with?(&1, "lib/ash_compliance/boundary/controls/"))
+      )
       |> Enum.sort()
     end
 
