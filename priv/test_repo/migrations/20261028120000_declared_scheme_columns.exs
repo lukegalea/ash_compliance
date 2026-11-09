@@ -20,21 +20,21 @@ defmodule AshCompliance.Repo.Migrations.DeclaredSchemeColumns do
 
   def up do
     alter table(:ash_compliance_policy_bundles) do
-      add :scheme, :text
+      add(:scheme, :text)
     end
 
     alter table(:ash_compliance_rule_set_revisions) do
-      add :scheme, :text
+      add(:scheme, :text)
     end
   end
 
   def down do
     alter table(:ash_compliance_rule_set_revisions) do
-      remove :scheme
+      remove(:scheme)
     end
 
     alter table(:ash_compliance_policy_bundles) do
-      remove :scheme
+      remove(:scheme)
     end
   end
 end

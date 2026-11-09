@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Luke Galea
+SPDX-License-Identifier: MIT
+-->
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:ash="https://github.com/lukegalea/ash_bpmn/ns"
+                   id="Definitions_risk_register_review"
+                   targetNamespace="https://github.com/lukegalea/ash_compliance/processes">
+  <bpmn2:process id="Process_risk_register_review" name="Risk register review" isExecutable="true">
+    <bpmn2:startEvent id="Start" name="Start">
+      <bpmn2:outgoing>Flow_2</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:serviceTask id="Service_1" name="Open the review record">
+      <bpmn2:extensionElements><ash:taskConfig action="compliance.open_record"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_2</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_4</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+    <bpmn2:userTask id="Task_3" name="Review the risk register">
+      <bpmn2:extensionElements><ash:taskConfig><ash:candidates><ash:candidate kind="role" of="risk_owner"/></ash:candidates><ash:outcomes><ash:outcome name="reviewed"/><ash:outcome name="not_completed"/></ash:outcomes><ash:timers><ash:timer kind="remind" hours="112"/><ash:timer kind="escalate" hours="224"/><ash:timer kind="expire" days="14"/></ash:timers></ash:taskConfig></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_4</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_6</bpmn2:outgoing>
+    </bpmn2:userTask>
+    <bpmn2:exclusiveGateway id="Gateway_5" name="Review the risk register: finished?" default="Flow_7">
+      <bpmn2:incoming>Flow_6</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_7</bpmn2:outgoing>
+      <bpmn2:outgoing>Flow_9</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:endEvent id="End_not_completed" name="Not completed">
+      <bpmn2:extensionElements><ash:taskConfig outcome="not_completed"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_7</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:userTask id="Task_8" name="Sign off the review">
+      <bpmn2:extensionElements><ash:taskConfig><ash:candidates><ash:candidate kind="role" of="approver"/></ash:candidates><ash:exclusions><ash:exclusion who="subject.requester_id"/></ash:exclusions><ash:outcomes><ash:outcome name="approved"/><ash:outcome name="rejected"/></ash:outcomes><ash:timers><ash:timer kind="remind" hours="112"/><ash:timer kind="escalate" hours="224"/><ash:timer kind="expire" days="14"/></ash:timers></ash:taskConfig></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_9</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_11</bpmn2:outgoing>
+    </bpmn2:userTask>
+    <bpmn2:exclusiveGateway id="Gateway_10" name="Sign off the review: approved?" default="Flow_12">
+      <bpmn2:incoming>Flow_11</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_12</bpmn2:outgoing>
+      <bpmn2:outgoing>Flow_14</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:endEvent id="End_rejected" name="Rejected or expired">
+      <bpmn2:extensionElements><ash:taskConfig outcome="rejected"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_12</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:businessRuleTask id="Decision_13" name="Check separation of duties">
+      <bpmn2:extensionElements><ash:decision ref="compliance.separation_of_duties" binding="latest"/><ash:inputs><ash:input name="requester" from="subject.requester_id"/><ash:input name="approver" from="subject.approver_id"/><ash:input name="delegators" from="subject.delegator_ids"/></ash:inputs><ash:promote><ash:signal name="separation" from="outcome" required="true"/></ash:promote></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_14</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_16</bpmn2:outgoing>
+    </bpmn2:businessRuleTask>
+    <bpmn2:exclusiveGateway id="Gateway_15" name="Sign off the review: different people?" default="Flow_17">
+      <bpmn2:incoming>Flow_16</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_17</bpmn2:outgoing>
+      <bpmn2:outgoing>Flow_19</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:endEvent id="End_refused" name="Refused: approver is the requester">
+      <bpmn2:extensionElements><ash:taskConfig outcome="refused"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_17</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:serviceTask id="Service_18" name="Record completion evidence">
+      <bpmn2:extensionElements><ash:taskConfig action="compliance.record_completion"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_19</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_20</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+    <bpmn2:endEvent id="End_completed" name="Completed">
+      <bpmn2:extensionElements><ash:taskConfig outcome="completed"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_20</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:sequenceFlow id="Flow_2" sourceRef="Start" targetRef="Service_1"/>
+    <bpmn2:sequenceFlow id="Flow_4" sourceRef="Service_1" targetRef="Task_3"/>
+    <bpmn2:sequenceFlow id="Flow_6" sourceRef="Task_3" targetRef="Gateway_5"/>
+    <bpmn2:sequenceFlow id="Flow_7" sourceRef="Gateway_5" targetRef="End_not_completed"/>
+    <bpmn2:sequenceFlow id="Flow_9" sourceRef="Gateway_5" targetRef="Task_8">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="feel">task.outcome = "reviewed"</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="Flow_11" sourceRef="Task_8" targetRef="Gateway_10"/>
+    <bpmn2:sequenceFlow id="Flow_12" sourceRef="Gateway_10" targetRef="End_rejected"/>
+    <bpmn2:sequenceFlow id="Flow_14" sourceRef="Gateway_10" targetRef="Decision_13">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="feel">task.outcome = "approved"</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="Flow_16" sourceRef="Decision_13" targetRef="Gateway_15"/>
+    <bpmn2:sequenceFlow id="Flow_17" sourceRef="Gateway_15" targetRef="End_refused"/>
+    <bpmn2:sequenceFlow id="Flow_19" sourceRef="Gateway_15" targetRef="Service_18">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="feel">routing.separation = "permit"</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="Flow_20" sourceRef="Service_18" targetRef="End_completed"/>
+  </bpmn2:process>
+</bpmn2:definitions>

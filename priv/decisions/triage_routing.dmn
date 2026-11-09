@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Luke Galea
+SPDX-License-Identifier: MIT
+-->
+<definitions xmlns="https://www.omg.org/spec/DMN/20230324/MODEL/"
+             id="compliance_triage_routing_definitions"
+             name="Triage routing"
+             namespace="https://github.com/lukegalea/ash_compliance/decisions/triage_routing"
+             expressionLanguage="https://www.omg.org/spec/DMN/20230324/FEEL/"
+             typeLanguage="https://www.omg.org/spec/DMN/20230324/FEEL/">
+  <inputData id="input_severity" name="severity">
+    <variable id="var_severity" name="severity" typeRef="string"/>
+  </inputData>
+  <decision id="decision_route" name="TriageRoute">
+    <variable id="var_route" name="TriageRoute" typeRef="string"/>
+    <informationRequirement id="req_severity">
+      <requiredInput href="#input_severity"/>
+    </informationRequirement>
+    <decisionTable id="table_route" hitPolicy="FIRST" outputLabel="Route">
+      <input id="clause_severity" label="Severity">
+        <inputExpression id="expr_severity" typeRef="string"><text>severity</text></inputExpression>
+      </input>
+      <output id="clause_route" name="route" label="Route" typeRef="string"/>
+      <rule id="rule_critical">
+        <inputEntry id="rule_critical_0"><text>"critical"</text></inputEntry>
+        <outputEntry id="rule_critical_1"><text>"urgent"</text></outputEntry>
+      </rule>
+      <rule id="rule_high">
+        <inputEntry id="rule_high_0"><text>"high"</text></inputEntry>
+        <outputEntry id="rule_high_1"><text>"urgent"</text></outputEntry>
+      </rule>
+      <rule id="rule_medium">
+        <inputEntry id="rule_medium_0"><text>"medium"</text></inputEntry>
+        <outputEntry id="rule_medium_1"><text>"standard"</text></outputEntry>
+      </rule>
+      <rule id="rule_low">
+        <inputEntry id="rule_low_0"><text>"low"</text></inputEntry>
+        <outputEntry id="rule_low_1"><text>"record_only"</text></outputEntry>
+      </rule>
+      <rule id="rule_unrecognised">
+        <inputEntry id="rule_unrecognised_0"><text>-</text></inputEntry>
+        <outputEntry id="rule_unrecognised_1"><text>"standard"</text></outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+</definitions>

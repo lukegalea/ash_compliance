@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Luke Galea
+SPDX-License-Identifier: MIT
+-->
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:ash="https://github.com/lukegalea/ash_bpmn/ns"
+                   id="Definitions_retention_disposal_approval"
+                   targetNamespace="https://github.com/lukegalea/ash_compliance/processes">
+  <bpmn2:process id="Process_retention_disposal_approval" name="Retention and disposal approval" isExecutable="true">
+    <bpmn2:startEvent id="Start" name="Start">
+      <bpmn2:outgoing>Flow_2</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:serviceTask id="Service_1" name="Open the schedule record">
+      <bpmn2:extensionElements><ash:taskConfig action="compliance.open_record"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_2</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_4</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+    <bpmn2:userTask id="Task_3" name="Approve the schedule or disposal">
+      <bpmn2:extensionElements><ash:taskConfig><ash:candidates><ash:candidate kind="role" of="approver"/></ash:candidates><ash:exclusions><ash:exclusion who="subject.requester_id"/></ash:exclusions><ash:outcomes><ash:outcome name="approved"/><ash:outcome name="rejected"/></ash:outcomes><ash:timers><ash:timer kind="remind" hours="112"/><ash:timer kind="escalate" hours="224"/><ash:timer kind="expire" days="14"/></ash:timers></ash:taskConfig></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_4</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_6</bpmn2:outgoing>
+    </bpmn2:userTask>
+    <bpmn2:exclusiveGateway id="Gateway_5" name="Approve the schedule or disposal: approved?" default="Flow_7">
+      <bpmn2:incoming>Flow_6</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_7</bpmn2:outgoing>
+      <bpmn2:outgoing>Flow_9</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:endEvent id="End_rejected" name="Rejected or expired">
+      <bpmn2:extensionElements><ash:taskConfig outcome="rejected"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_7</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:businessRuleTask id="Decision_8" name="Check separation of duties">
+      <bpmn2:extensionElements><ash:decision ref="compliance.separation_of_duties" binding="latest"/><ash:inputs><ash:input name="requester" from="subject.requester_id"/><ash:input name="approver" from="subject.approver_id"/><ash:input name="delegators" from="subject.delegator_ids"/></ash:inputs><ash:promote><ash:signal name="separation" from="outcome" required="true"/></ash:promote></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_9</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_11</bpmn2:outgoing>
+    </bpmn2:businessRuleTask>
+    <bpmn2:exclusiveGateway id="Gateway_10" name="Approve the schedule or disposal: different people?" default="Flow_12">
+      <bpmn2:incoming>Flow_11</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_12</bpmn2:outgoing>
+      <bpmn2:outgoing>Flow_14</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:endEvent id="End_refused" name="Refused: approver is the requester">
+      <bpmn2:extensionElements><ash:taskConfig outcome="refused"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_12</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:serviceTask id="Service_13" name="Apply the approved schedule">
+      <bpmn2:extensionElements><ash:taskConfig action="compliance.apply_decision"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_14</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_16</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+    <bpmn2:serviceTask id="Service_15" name="Record completion evidence">
+      <bpmn2:extensionElements><ash:taskConfig action="compliance.record_completion"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_16</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_17</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+    <bpmn2:endEvent id="End_completed" name="Completed">
+      <bpmn2:extensionElements><ash:taskConfig outcome="completed"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_17</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:sequenceFlow id="Flow_2" sourceRef="Start" targetRef="Service_1"/>
+    <bpmn2:sequenceFlow id="Flow_4" sourceRef="Service_1" targetRef="Task_3"/>
+    <bpmn2:sequenceFlow id="Flow_6" sourceRef="Task_3" targetRef="Gateway_5"/>
+    <bpmn2:sequenceFlow id="Flow_7" sourceRef="Gateway_5" targetRef="End_rejected"/>
+    <bpmn2:sequenceFlow id="Flow_9" sourceRef="Gateway_5" targetRef="Decision_8">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="feel">task.outcome = "approved"</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="Flow_11" sourceRef="Decision_8" targetRef="Gateway_10"/>
+    <bpmn2:sequenceFlow id="Flow_12" sourceRef="Gateway_10" targetRef="End_refused"/>
+    <bpmn2:sequenceFlow id="Flow_14" sourceRef="Gateway_10" targetRef="Service_13">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="feel">routing.separation = "permit"</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="Flow_16" sourceRef="Service_13" targetRef="Service_15"/>
+    <bpmn2:sequenceFlow id="Flow_17" sourceRef="Service_15" targetRef="End_completed"/>
+  </bpmn2:process>
+</bpmn2:definitions>

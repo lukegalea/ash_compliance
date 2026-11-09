@@ -53,3 +53,10 @@ config :ash_compliance, AshCompliance.Web.TestEndpoint,
   render_errors: [formats: [html: {AshCompliance.Web.ErrorView, :render, []}], layout: false]
 
 config :logger, level: :warning
+
+# The process engines are optional dependencies used here to prove the shipped
+# BPMN and DMN documents compile and verify. These resolvers answer their
+# publish-time questions from the documents this package ships.
+config :ash_bpmn,
+  decision_resolver: AshCompliance.Test.DecisionResolver,
+  action_invoker: AshCompliance.Test.ActionInvoker

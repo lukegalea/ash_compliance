@@ -61,7 +61,7 @@ defmodule AshCompliance.Repo.Migrations.TemporalCatalogVersions do
     execute("CREATE EXTENSION IF NOT EXISTS \"btree_gist\"")
 
     alter table(@table) do
-      add :valid_at, :tstzrange
+      add(:valid_at, :tstzrange)
     end
 
     # Backfill the period from the publication instant: half-open
@@ -88,13 +88,9 @@ defmodule AshCompliance.Repo.Migrations.TemporalCatalogVersions do
     # The plain unique indexes become instant-unique exclusions, named to
     # the generator's convention (`<table>_<identity>_index`) so the data
     # layer maps violations to the identity's clean error.
-    execute(
-      "DROP INDEX IF EXISTS #{@table}_catalog_id_version_index"
-    )
+    execute("DROP INDEX IF EXISTS #{@table}_catalog_id_version_index")
 
-    execute(
-      "DROP INDEX IF EXISTS #{@table}_catalog_id_content_hash_index"
-    )
+    execute("DROP INDEX IF EXISTS #{@table}_catalog_id_content_hash_index")
 
     execute("""
     ALTER TABLE #{@table}
@@ -120,13 +116,13 @@ defmodule AshCompliance.Repo.Migrations.TemporalCatalogVersions do
     # has moved every value into the period, and the `range_lower`
     # calculation re-derives the name for reads.
     alter table(@table) do
-      remove :published_at
+      remove(:published_at)
     end
   end
 
   def down do
     alter table(@table) do
-      add :published_at, :utc_datetime_usec
+      add(:published_at, :utc_datetime_usec)
     end
 
     execute("""
@@ -150,7 +146,7 @@ defmodule AshCompliance.Repo.Migrations.TemporalCatalogVersions do
     )
 
     alter table(@table) do
-      remove :valid_at
+      remove(:valid_at)
     end
   end
 end

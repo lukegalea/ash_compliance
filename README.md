@@ -288,6 +288,9 @@ PGPORT=5435 mix test          # config/test.exs documents DB_HOST/DB_USER/DB_PAS
   the evidence writer and the freshness worker.
 - [The boundary declaration](documentation/topics/boundary.md) — environments,
   resources and control links, and the JSON generated and gated by `mix ash.codegen`.
+- [Operator processes and access reviews](documentation/topics/operator-processes.md) —
+  the BPMN and DMN templates, separation of duties, completion evidence, overdue
+  findings and the access review campaign.
 - [What it refuses](documentation/topics/what-it-refuses.md) — the compile
   and admission refusals, verbatim.
 

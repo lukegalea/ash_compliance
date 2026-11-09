@@ -73,8 +73,8 @@ defmodule AshCompliance.Repo.Migrations.TemporalRuleSetRevisions do
     execute("CREATE EXTENSION IF NOT EXISTS \"btree_gist\"")
 
     alter table(@table) do
-      add :active_key, :text
-      add :valid_at, :tstzrange
+      add(:active_key, :text)
+      add(:valid_at, :tstzrange)
     end
 
     # Backfill in place: the period opens at insertion (naive UTC column
@@ -106,9 +106,7 @@ defmodule AshCompliance.Repo.Migrations.TemporalRuleSetRevisions do
     # The plain unique index becomes an instant-unique exclusion, named to
     # the generator's convention (`<table>_<identity>_index`) so the data
     # layer maps violations to the identity's clean error.
-    execute(
-      "DROP INDEX IF EXISTS #{@table}_organization_id_name_revision_index"
-    )
+    execute("DROP INDEX IF EXISTS #{@table}_organization_id_name_revision_index")
 
     execute("""
     ALTER TABLE #{@table}
@@ -147,8 +145,8 @@ defmodule AshCompliance.Repo.Migrations.TemporalRuleSetRevisions do
     )
 
     alter table(@table) do
-      remove :valid_at
-      remove :active_key
+      remove(:valid_at)
+      remove(:active_key)
     end
   end
 end

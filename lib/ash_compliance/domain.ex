@@ -205,5 +205,41 @@ defmodule AshCompliance.Domain do
       define(:get_evidence_artifact_by_id, action: :read, get_by: [:id])
       define(:evidence_for_control, action: :for_control, args: [:organization_id, :control_id])
     end
+
+    resource(AshCompliance.Resources.AccessReviewCampaign) do
+      define(:open_access_review_campaign, action: :open)
+      define(:close_access_review_campaign, action: :close)
+      define(:get_access_review_campaign_by_id, action: :read, get_by: [:id])
+
+      define(:access_review_campaigns_for_organization,
+        action: :for_organization,
+        args: [:organization_id]
+      )
+    end
+
+    resource(AshCompliance.Resources.AccessReviewRow) do
+      define(:add_access_review_row, action: :add)
+      define(:get_access_review_row_by_id, action: :read, get_by: [:id])
+      define(:access_review_rows_for_campaign, action: :for_campaign, args: [:campaign_id])
+    end
+
+    resource(AshCompliance.Resources.AccessReviewDecision) do
+      define(:record_access_review_decision, action: :record)
+      define(:access_review_decisions_for_campaign, action: :for_campaign, args: [:campaign_id])
+    end
+
+    resource(AshCompliance.Resources.ApprovalAttempt) do
+      define(:record_approval_attempt, action: :record)
+
+      define(:approval_attempts_for_subject,
+        action: :for_subject,
+        args: [:organization_id, :process_key, :subject_id]
+      )
+
+      define(:approval_attempts_for_organization,
+        action: :for_organization,
+        args: [:organization_id]
+      )
+    end
   end
 end

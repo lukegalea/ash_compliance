@@ -63,7 +63,7 @@ defmodule AshCompliance.Repo.Migrations.TemporalControlRevisions do
     execute("CREATE EXTENSION IF NOT EXISTS \"btree_gist\"")
 
     alter table(@table) do
-      add :valid_at, :tstzrange
+      add(:valid_at, :tstzrange)
     end
 
     # Backfill in place: the period opens at insertion (naive UTC column
@@ -111,7 +111,7 @@ defmodule AshCompliance.Repo.Migrations.TemporalControlRevisions do
     )
 
     alter table(@table) do
-      remove :valid_at
+      remove(:valid_at)
     end
   end
 end

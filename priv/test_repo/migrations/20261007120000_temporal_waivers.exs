@@ -43,8 +43,8 @@ defmodule AshCompliance.Repo.Migrations.TemporalWaivers do
     execute("CREATE EXTENSION IF NOT EXISTS \"btree_gist\"")
 
     alter table(@table) do
-      add :scope_key, :text
-      add :valid_at, :tstzrange
+      add(:scope_key, :text)
+      add(:valid_at, :tstzrange)
     end
 
     # Backfill scope_key exactly as Changes.DeriveScopeKey derives it.
@@ -66,8 +66,8 @@ defmodule AshCompliance.Repo.Migrations.TemporalWaivers do
     execute("ALTER TABLE #{@table} ALTER COLUMN valid_at SET NOT NULL")
 
     alter table(@table) do
-      remove :starts_at
-      remove :expires_at
+      remove(:starts_at)
+      remove(:expires_at)
     end
 
     # The version-history primary key: one record, many non-overlapping
@@ -101,8 +101,8 @@ defmodule AshCompliance.Repo.Migrations.TemporalWaivers do
     execute("ALTER TABLE #{@table} ADD CONSTRAINT #{@table}_pkey PRIMARY KEY (id)")
 
     alter table(@table) do
-      add :starts_at, :utc_datetime_usec
-      add :expires_at, :utc_datetime_usec
+      add(:starts_at, :utc_datetime_usec)
+      add(:expires_at, :utc_datetime_usec)
     end
 
     execute("""
@@ -111,8 +111,8 @@ defmodule AshCompliance.Repo.Migrations.TemporalWaivers do
     """)
 
     alter table(@table) do
-      remove :valid_at
-      remove :scope_key
+      remove(:valid_at)
+      remove(:scope_key)
     end
   end
 end
