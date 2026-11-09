@@ -7,16 +7,18 @@ defmodule AshCompliance.BoundaryTest do
   import ExUnit.CaptureIO
 
   alias AshCompliance.Boundary
-  alias AshCompliance.Boundary.{Codegen, Info, Json, Render}
+  alias AshCompliance.Boundary.{Codegen, GeneratedFiles, Info, Json, Render}
+  alias AshCompliance.Boundary.Controls.Render, as: ControlsRender
   alias AshCompliance.Test.BoundaryFixture
 
   @expected_dir "test/fixtures/boundary/expected"
+  @all_files Enum.sort(Render.file_names() ++ ControlsRender.file_names())
 
-  @env_prod "environment :production do\n class :audited\n zone \"zone-a\"\n end"
-  @env_prev "environment :preview do\n class :excluded\n data_ceiling :synthetic\n end"
+  @env_prod "environment :production do\n class :production\n zone \"zone-a\"\n end"
+  @env_prev "environment :preview do\n class :non_production\n data_ceiling :synthetic\n end"
   @res_lb "resource :lb do\n environment :production\n kind :managed\n type \"aws_lb\"\n end"
   @res_idp "resource :idp do\n environment :production\n kind :data_source\n end"
-  @res_prev "resource :prev_app do\n environment :preview\n kind :managed\n type \"fly_app\"\n end"
+  @res_prev "resource :prev_app do\n environment :preview\n kind :managed\n type \"compute_app\"\n end"
   @ctl_a ~s|control "CC6.6" do\n resources [:lb]\n evidence ["b", "a"]\n end|
   @ctl_b ~s|control "CC6.1" do\n resources [:idp, :lb]\n evidence ["c"]\n end|
 
@@ -43,6 +45,7 @@ defmodule AshCompliance.BoundaryTest do
       end
 
       controls do
+        #{audited_line(opts)}
         #{Enum.join(Keyword.get(opts, :controls, [@ctl_a, @ctl_b]), "\n")}
       end
     end
@@ -50,6 +53,13 @@ defmodule AshCompliance.BoundaryTest do
 
     [{module, _}] = Code.compile_string(source)
     module
+  end
+
+  defp audited_line(opts) do
+    case Keyword.get(opts, :audited, "[:production]") do
+      nil -> ""
+      names -> "audited_environments #{names}"
+    end
   end
 
   defp refused(opts, pattern) do
@@ -65,10 +75,10 @@ defmodule AshCompliance.BoundaryTest do
 
   describe "generated files" do
     test "equal the hand-written expected files byte for byte" do
-      files = BoundaryFixture |> Info.declaration() |> Render.files()
+      files = GeneratedFiles.files(BoundaryFixture)
 
-      assert Enum.sort(Map.keys(files)) == Render.file_names()
-      assert Render.file_names() == @expected_dir |> File.ls!() |> Enum.sort()
+      assert Enum.sort(Map.keys(files)) == @all_files
+      assert @all_files == @expected_dir |> File.ls!() |> Enum.sort()
 
       for {name, content} <- files do
         assert content == File.read!(Path.join(@expected_dir, name)), "#{name} differs"
@@ -76,7 +86,7 @@ defmodule AshCompliance.BoundaryTest do
     end
 
     test "do not depend on declaration order" do
-      reference = define() |> Info.declaration() |> Render.files()
+      reference = GeneratedFiles.files(define())
 
       permuted =
         define(
@@ -92,12 +102,12 @@ defmodule AshCompliance.BoundaryTest do
           controls: [@ctl_b, @ctl_a]
         )
 
-      assert permuted |> Info.declaration() |> Render.files() == reference
-      assert rotated |> Info.declaration() |> Render.files() == reference
+      assert GeneratedFiles.files(permuted) == reference
+      assert GeneratedFiles.files(rotated) == reference
     end
 
     test "say owned, never compliant or evidenced" do
-      for {_name, content} <- BoundaryFixture |> Info.declaration() |> Render.files() do
+      for {_name, content} <- GeneratedFiles.files(BoundaryFixture) do
         refute content =~ ~r/compliant|evidenced|verified|passed/i
       end
 
@@ -122,7 +132,7 @@ defmodule AshCompliance.BoundaryTest do
       )
     end
 
-    test "a control whose only resource is in an excluded environment" do
+    test "a control whose only resource is in a non-production environment" do
       refused(
         [controls: ["control \"CC1.1\" do\n resources [:prev_app]\n evidence [\"a\"]\n end"]],
         ~s(control "CC1.1" has no resource in an audited environment)
@@ -150,22 +160,22 @@ defmodule AshCompliance.BoundaryTest do
       )
     end
 
-    test "an excluded environment with no data ceiling" do
+    test "a non-production environment with no data ceiling" do
       refused(
-        [environments: [@env_prod, "environment :preview do\n class :excluded\n end"]],
-        "excluded environment :preview has no data ceiling"
+        [environments: [@env_prod, "environment :preview do\n class :non_production\n end"]],
+        "non-production environment :preview has no data ceiling"
       )
     end
 
-    test "an audited environment that declares a data ceiling" do
+    test "a production environment that declares a data ceiling" do
       refused(
         [
           environments: [
-            "environment :production do\n class :audited\n data_ceiling :synthetic\n end",
+            "environment :production do\n class :production\n data_ceiling :synthetic\n end",
             @env_prev
           ]
         ],
-        "audited environment :production declares a data ceiling"
+        "production environment :production declares a data ceiling"
       )
     end
 
@@ -174,7 +184,7 @@ defmodule AshCompliance.BoundaryTest do
         define(
           environments: [
             @env_prod,
-            "environment :preview do\n class :excluded\n data_ceiling :real\n end"
+            "environment :preview do\n class :non_production\n data_ceiling :real\n end"
           ]
         )
       end
@@ -215,7 +225,7 @@ defmodule AshCompliance.BoundaryTest do
 
     test "a blank zone id" do
       refused(
-        [environments: ["environment :production do\n class :audited\n zone \" \"\n end"]],
+        [environments: ["environment :production do\n class :production\n zone \" \"\n end"]],
         "environment :production has a zone id that is blank"
       )
     end
@@ -238,19 +248,22 @@ defmodule AshCompliance.BoundaryTest do
       refused([controls: [@ctl_a, @ctl_a]], ~s(control "CC6.6" is declared more than once))
     end
 
-    test "reports every violation at once" do
+    test "reports every violation of the production rules at once" do
       error =
         assert_raise Spark.Error.DslError, fn ->
           define(
-            environments: ["environment :preview do\n class :excluded\n end"],
-            resources: [@res_prev],
-            controls: ["control \"CC1.1\" do\n resources [:ghost]\n evidence [\"a\"]\n end"]
+            environments: ["environment :preview do\n class :non_production\n end"],
+            resources: [
+              @res_prev,
+              "resource :x do\n environment :nowhere\n kind :data_source\n end"
+            ],
+            controls: []
           )
         end
 
       message = Exception.message(error)
       assert message =~ "no data ceiling"
-      assert message =~ "undeclared resource :ghost"
+      assert message =~ "undeclared environment :nowhere"
     end
   end
 
@@ -269,14 +282,14 @@ defmodule AshCompliance.BoundaryTest do
         )
 
       pending = Codegen.run(changed, check: true)
-      assert Enum.sort(Enum.map(pending, &Path.basename/1)) == Render.file_names()
+      assert Enum.sort(Enum.map(pending, &Path.basename/1)) == @all_files
 
       error =
         assert_raise Ash.Error.Framework.PendingCodegen, fn ->
           Boundary.codegen(["--check", "--boundary", inspect(changed)])
         end
 
-      assert Exception.message(error) =~ "Pending Code Generation Detected for 4 files"
+      assert Exception.message(error) =~ "Pending Code Generation Detected for 5 files"
     end
 
     test "a change to one fact leaves only the files it touches pending" do
@@ -292,14 +305,14 @@ defmodule AshCompliance.BoundaryTest do
         )
 
       assert changed |> Codegen.run(check: true) |> Enum.map(&Path.basename/1) |> Enum.sort() ==
-               ["boundary.snapshot.json", "control-map.json"]
+               ["control-map.json", "controls.snapshot.json"]
     end
 
     test "missing, empty and malformed files are pending, never current" do
       dir = tmp_dir()
       mod = define(output_dir: inspect(dir))
 
-      assert length(Codegen.run(mod, check: true)) == 4
+      assert length(Codegen.run(mod, check: true)) == 5
 
       Codegen.run(mod)
       File.write!(Path.join(dir, "control-map.json"), "")
@@ -318,7 +331,7 @@ defmodule AshCompliance.BoundaryTest do
       refute File.exists?(dir)
 
       capture_io(fn -> Boundary.codegen(["--boundary", inspect(mod), "--name", "ignored"]) end)
-      assert Enum.sort(File.ls!(dir)) == Render.file_names()
+      assert Enum.sort(File.ls!(dir)) == @all_files
       assert :ok = Boundary.codegen(["--check", "--dev", "--boundary", inspect(mod)])
     end
 
@@ -329,9 +342,9 @@ defmodule AshCompliance.BoundaryTest do
         Boundary.codegen(["--boundary", inspect(BoundaryFixture), "--output-dir", dir])
       end)
 
-      assert Enum.sort(File.ls!(dir)) == Render.file_names()
+      assert Enum.sort(File.ls!(dir)) == @all_files
 
-      for name <- Render.file_names() do
+      for name <- @all_files do
         assert File.read!(Path.join(dir, name)) == File.read!(Path.join(@expected_dir, name))
       end
     end

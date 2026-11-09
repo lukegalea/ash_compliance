@@ -3,7 +3,10 @@
 
 defmodule AshCompliance.Boundary.Codegen do
   @moduledoc """
-  Writes, or checks, the files generated from boundary declarations.
+  Writes, or checks, the files generated from declarations.
+
+  The files come from `AshCompliance.Boundary.GeneratedFiles`: every
+  extension a declaration uses contributes its own.
 
   The generated files are the snapshot: a check renders each declaration in
   memory and compares it with what is on disk. Any file that is missing or
@@ -11,7 +14,7 @@ defmodule AshCompliance.Boundary.Codegen do
   compared.
   """
 
-  alias AshCompliance.Boundary.{Info, Render}
+  alias AshCompliance.Boundary.{GeneratedFiles, Info}
 
   @type opts :: [check: boolean(), dry_run: boolean(), output_dir: String.t() | nil]
 
@@ -19,36 +22,45 @@ defmodule AshCompliance.Boundary.Codegen do
   @spec run(module(), opts()) :: [String.t()]
   def run(module, opts \\ []) do
     dir = Keyword.get(opts, :output_dir) || Info.output_dir(module)
-    files = module |> Info.declaration() |> Render.files()
+    files = GeneratedFiles.files(module)
 
     pending =
       files
       |> Enum.sort()
       |> Enum.reject(fn {name, content} -> File.read(Path.join(dir, name)) == {:ok, content} end)
 
+    stale = GeneratedFiles.stale(module, dir)
+    pending_paths = Enum.map(pending, fn {name, _} -> Path.join(dir, name) end)
+    stale_paths = Enum.map(stale, &Path.join(dir, &1))
+
     cond do
       Keyword.get(opts, :check, false) ->
-        Enum.map(pending, fn {name, _} -> Path.join(dir, name) end)
+        pending_paths ++ stale_paths
 
       Keyword.get(opts, :dry_run, false) ->
         Enum.each(pending, fn {name, content} ->
           Mix.shell().info("# #{Path.join(dir, name)}\n#{content}")
         end)
 
-        Enum.map(pending, fn {name, _} -> Path.join(dir, name) end)
+        Enum.each(stale_paths, &Mix.shell().info("# remove #{&1}"))
+        pending_paths ++ stale_paths
 
       true ->
         File.mkdir_p!(dir)
+        Enum.each(stale_paths, &File.rm!/1)
 
-        Enum.map(pending, fn {name, content} ->
-          path = Path.join(dir, name)
-          File.write!(path, content)
-          path
-        end)
+        written =
+          Enum.map(pending, fn {name, content} ->
+            path = Path.join(dir, name)
+            File.write!(path, content)
+            path
+          end)
+
+        written ++ stale_paths
     end
   end
 
-  @doc "Every boundary declaration compiled into the current project's applications."
+  @doc "Every declaration compiled into the current project's applications."
   @spec discover() :: [module()]
   def discover do
     apps =

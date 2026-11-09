@@ -3,8 +3,7 @@
 
 defmodule AshCompliance.Boundary.Transformers.EnforceRules do
   @moduledoc """
-  Fails the compile of a boundary declaration that breaks
-  `AshCompliance.Boundary.Rules`.
+  Fails the compile of a declaration that breaks `AshCompliance.Boundary.Rules`.
 
   Spark reports an error from an `@after_verify` verifier as a compiler
   warning, which a host that does not compile with warnings as errors would
@@ -21,8 +20,7 @@ defmodule AshCompliance.Boundary.Transformers.EnforceRules do
     decl = %{
       name: Transformer.get_option(dsl_state, [:boundary], :name),
       environments: Transformer.get_entities(dsl_state, [:environments]),
-      resources: Transformer.get_entities(dsl_state, [:resources]),
-      controls: Transformer.get_entities(dsl_state, [:controls])
+      resources: Transformer.get_entities(dsl_state, [:resources])
     }
 
     case Rules.violations(decl) do

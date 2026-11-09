@@ -18,12 +18,16 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
-- `AshCompliance.Boundary`: a Spark extension that declares environments (audited, or
-  excluded under a data ceiling), resources (managed or data source) and control links.
-  A declaration with a control that no audited resource satisfies does not compile.
-  `mix ash.codegen` writes `control-map.json`, `boundary.auto.tfvars.json`,
-  `infra.assertions.json` and a snapshot as deterministic JSON, and `--check` fails when
-  any is missing or stale.
+- `AshCompliance.Boundary`: a Spark extension that declares environments (`:production`, or
+  `:non_production` under a data ceiling) and resources (managed or data source). It knows
+  nothing about audits. `mix ash.codegen` writes `boundary.auto.tfvars.json`,
+  `infra.assertions.json` and `boundary.snapshot.json` as deterministic JSON, and `--check`
+  fails when any is missing or stale. A declaration can use it alone with
+  `use AshCompliance.Boundary.Production`.
+- `AshCompliance.Boundary.Controls`: a separate extension that reads those facts. It adds
+  `audited_environments` and control links, refuses a control that no audited production
+  resource satisfies, and writes `control-map.json` and `controls.snapshot.json`.
+  `AshCompliance.Boundary.Declaration` includes both.
 - SOC 2 ownership contract: the 61 Trust Services Criteria as data, a control-file
   schema (`"criteria"` rows), `mix ash_compliance.controls.check`, an append-only
   evidence writer for `EvidenceArtifact`, a pure freshness evaluator, and the

@@ -206,6 +206,18 @@ the `ash_rules` tool to dry-evaluate a bundle before proposing a revision.
 data — propose changes as new revisions through the domain interfaces, never
 by rewriting `rules_json` in place.)
 
+## Declaring environments and controls
+
+Two Spark extensions, one direction of dependency. `AshCompliance.Boundary`
+declares `:production` and `:non_production` environments and their resources
+and knows nothing about audits; use it alone with
+`use AshCompliance.Boundary.Production`.
+`AshCompliance.Boundary.Controls` adds `audited_environments` and `control`
+links and reads those facts. `use AshCompliance.Boundary.Declaration` includes
+both. Never reference the controls from the production modules. Run
+`mix ash.codegen` after any change and commit the JSON; `--check` gates CI.
+See `documentation/topics/boundary.md`.
+
 ## Pin note
 
 Not on Hex. GitHub dependency, and the repository is private:

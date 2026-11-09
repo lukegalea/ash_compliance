@@ -14,17 +14,17 @@ defmodule AshCompliance.Test.BoundaryFixture do
 
   environments do
     environment :staging do
-      class(:excluded)
+      class(:non_production)
       data_ceiling(:pseudonymised)
     end
 
     environment :production do
-      class(:audited)
+      class(:production)
       zone("zone-a")
     end
 
     environment :preview do
-      class(:excluded)
+      class(:non_production)
       data_ceiling(:synthetic)
     end
   end
@@ -33,7 +33,7 @@ defmodule AshCompliance.Test.BoundaryFixture do
     resource :preview_app do
       environment(:preview)
       kind(:managed)
-      type("fly_app")
+      type("compute_app")
     end
 
     resource :load_balancer do
@@ -57,6 +57,8 @@ defmodule AshCompliance.Test.BoundaryFixture do
   end
 
   controls do
+    audited_environments([:production])
+
     control "CC6.6" do
       resources([:load_balancer])
       evidence(["infra.verify:tls_listener", "config:alb-https"])

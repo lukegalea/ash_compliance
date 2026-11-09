@@ -1,0 +1,29 @@
+{
+  "audited_environments": [
+    "production"
+  ],
+  "boundary": "fixture-host",
+  "controls": [
+    {
+      "criterion": "CC6.1",
+      "evidence": [
+        "access-listing.daily"
+      ],
+      "resources": [
+        "app_database",
+        "identity_provider"
+      ]
+    },
+    {
+      "criterion": "CC6.6",
+      "evidence": [
+        "config:alb-https",
+        "infra.verify:tls_listener"
+      ],
+      "resources": [
+        "load_balancer"
+      ]
+    }
+  ],
+  "schema": "ash_compliance.boundary.controls-snapshot/1"
+}
