@@ -64,7 +64,7 @@ defmodule AshCompliance.Repo.Migrations.TemporalTenantPolicySets do
     execute("CREATE EXTENSION IF NOT EXISTS \"btree_gist\"")
 
     alter table(@table) do
-      add(:valid_at, :tstzrange)
+      add :valid_at, :tstzrange
     end
 
     # Backfill in place: the period opens at insertion (naive UTC column
@@ -106,10 +106,12 @@ defmodule AshCompliance.Repo.Migrations.TemporalTenantPolicySets do
     execute("ALTER TABLE #{@table} DROP CONSTRAINT #{@table}_pkey")
     execute("ALTER TABLE #{@table} ADD CONSTRAINT #{@table}_pkey PRIMARY KEY (id)")
 
-    execute("CREATE UNIQUE INDEX #{@table}_organization_id_index ON #{@table} (organization_id)")
+    execute(
+      "CREATE UNIQUE INDEX #{@table}_organization_id_index ON #{@table} (organization_id)"
+    )
 
     alter table(@table) do
-      remove(:valid_at)
+      remove :valid_at
     end
   end
 end
