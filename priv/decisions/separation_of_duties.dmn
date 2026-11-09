@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Luke Galea
+SPDX-License-Identifier: MIT
+-->
+<definitions xmlns="https://www.omg.org/spec/DMN/20230324/MODEL/"
+             id="compliance_separation_of_duties_definitions"
+             name="Separation of duties"
+             namespace="https://github.com/lukegalea/ash_compliance/decisions/separation_of_duties"
+             expressionLanguage="https://www.omg.org/spec/DMN/20230324/FEEL/"
+             typeLanguage="https://www.omg.org/spec/DMN/20230324/FEEL/">
+  <inputData id="input_requester" name="requester">
+    <variable id="var_requester" name="requester" typeRef="string"/>
+  </inputData>
+  <inputData id="input_approver" name="approver">
+    <variable id="var_approver" name="approver" typeRef="string"/>
+  </inputData>
+  <inputData id="input_delegators" name="delegators">
+    <variable id="var_delegators" name="delegators"/>
+  </inputData>
+  <decision id="decision_sod" name="SeparationOfDuties">
+    <variable id="var_sod" name="SeparationOfDuties"/>
+    <informationRequirement id="req_requester">
+      <requiredInput href="#input_requester"/>
+    </informationRequirement>
+    <informationRequirement id="req_approver">
+      <requiredInput href="#input_approver"/>
+    </informationRequirement>
+    <informationRequirement id="req_delegators">
+      <requiredInput href="#input_delegators"/>
+    </informationRequirement>
+    <decisionTable id="table_sod" hitPolicy="FIRST" outputLabel="Separation of duties">
+      <input id="clause_requester" label="Requester">
+        <inputExpression id="expr_requester" typeRef="string"><text>requester</text></inputExpression>
+      </input>
+      <input id="clause_approver" label="Approver">
+        <inputExpression id="expr_approver" typeRef="string"><text>approver</text></inputExpression>
+      </input>
+      <input id="clause_delegation" label="Delegation chain recorded">
+        <inputExpression id="expr_delegation" typeRef="boolean"><text>delegators != null</text></inputExpression>
+      </input>
+      <input id="clause_same" label="Approver is requester">
+        <inputExpression id="expr_same" typeRef="boolean"><text>approver = requester</text></inputExpression>
+      </input>
+      <input id="clause_chain" label="Requester is in the delegation chain">
+        <inputExpression id="expr_chain" typeRef="boolean"><text>list contains(delegators, requester)</text></inputExpression>
+      </input>
+      <output id="clause_outcome" name="outcome" label="Outcome" typeRef="string"/>
+      <output id="clause_reason" name="reason" label="Reason" typeRef="string"/>
+      <rule id="rule_requester_missing">
+        <inputEntry id="rule_requester_missing_0"><text>null</text></inputEntry>
+        <inputEntry id="rule_requester_missing_1"><text>-</text></inputEntry>
+        <inputEntry id="rule_requester_missing_2"><text>-</text></inputEntry>
+        <inputEntry id="rule_requester_missing_3"><text>-</text></inputEntry>
+        <inputEntry id="rule_requester_missing_4"><text>-</text></inputEntry>
+        <outputEntry id="rule_requester_missing_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_requester_missing_6"><text>"requester_unknown"</text></outputEntry>
+      </rule>
+      <rule id="rule_requester_blank">
+        <inputEntry id="rule_requester_blank_0"><text>""</text></inputEntry>
+        <inputEntry id="rule_requester_blank_1"><text>-</text></inputEntry>
+        <inputEntry id="rule_requester_blank_2"><text>-</text></inputEntry>
+        <inputEntry id="rule_requester_blank_3"><text>-</text></inputEntry>
+        <inputEntry id="rule_requester_blank_4"><text>-</text></inputEntry>
+        <outputEntry id="rule_requester_blank_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_requester_blank_6"><text>"requester_unknown"</text></outputEntry>
+      </rule>
+      <rule id="rule_approver_missing">
+        <inputEntry id="rule_approver_missing_0"><text>-</text></inputEntry>
+        <inputEntry id="rule_approver_missing_1"><text>null</text></inputEntry>
+        <inputEntry id="rule_approver_missing_2"><text>-</text></inputEntry>
+        <inputEntry id="rule_approver_missing_3"><text>-</text></inputEntry>
+        <inputEntry id="rule_approver_missing_4"><text>-</text></inputEntry>
+        <outputEntry id="rule_approver_missing_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_approver_missing_6"><text>"approver_unknown"</text></outputEntry>
+      </rule>
+      <rule id="rule_approver_blank">
+        <inputEntry id="rule_approver_blank_0"><text>-</text></inputEntry>
+        <inputEntry id="rule_approver_blank_1"><text>""</text></inputEntry>
+        <inputEntry id="rule_approver_blank_2"><text>-</text></inputEntry>
+        <inputEntry id="rule_approver_blank_3"><text>-</text></inputEntry>
+        <inputEntry id="rule_approver_blank_4"><text>-</text></inputEntry>
+        <outputEntry id="rule_approver_blank_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_approver_blank_6"><text>"approver_unknown"</text></outputEntry>
+      </rule>
+      <rule id="rule_delegation_unknown">
+        <inputEntry id="rule_delegation_unknown_0"><text>-</text></inputEntry>
+        <inputEntry id="rule_delegation_unknown_1"><text>-</text></inputEntry>
+        <inputEntry id="rule_delegation_unknown_2"><text>false</text></inputEntry>
+        <inputEntry id="rule_delegation_unknown_3"><text>-</text></inputEntry>
+        <inputEntry id="rule_delegation_unknown_4"><text>-</text></inputEntry>
+        <outputEntry id="rule_delegation_unknown_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_delegation_unknown_6"><text>"delegation_unknown"</text></outputEntry>
+      </rule>
+      <rule id="rule_self_approval">
+        <inputEntry id="rule_self_approval_0"><text>-</text></inputEntry>
+        <inputEntry id="rule_self_approval_1"><text>-</text></inputEntry>
+        <inputEntry id="rule_self_approval_2"><text>-</text></inputEntry>
+        <inputEntry id="rule_self_approval_3"><text>true</text></inputEntry>
+        <inputEntry id="rule_self_approval_4"><text>-</text></inputEntry>
+        <outputEntry id="rule_self_approval_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_self_approval_6"><text>"self_approval"</text></outputEntry>
+      </rule>
+      <rule id="rule_delegated_self_approval">
+        <inputEntry id="rule_delegated_self_approval_0"><text>-</text></inputEntry>
+        <inputEntry id="rule_delegated_self_approval_1"><text>-</text></inputEntry>
+        <inputEntry id="rule_delegated_self_approval_2"><text>-</text></inputEntry>
+        <inputEntry id="rule_delegated_self_approval_3"><text>-</text></inputEntry>
+        <inputEntry id="rule_delegated_self_approval_4"><text>true</text></inputEntry>
+        <outputEntry id="rule_delegated_self_approval_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_delegated_self_approval_6"><text>"delegated_self_approval"</text></outputEntry>
+      </rule>
+      <rule id="rule_permit">
+        <inputEntry id="rule_permit_0"><text>-</text></inputEntry>
+        <inputEntry id="rule_permit_1"><text>-</text></inputEntry>
+        <inputEntry id="rule_permit_2"><text>true</text></inputEntry>
+        <inputEntry id="rule_permit_3"><text>false</text></inputEntry>
+        <inputEntry id="rule_permit_4"><text>false</text></inputEntry>
+        <outputEntry id="rule_permit_5"><text>"permit"</text></outputEntry>
+        <outputEntry id="rule_permit_6"><text>"different_people"</text></outputEntry>
+      </rule>
+      <rule id="rule_unresolved">
+        <inputEntry id="rule_unresolved_0"><text>-</text></inputEntry>
+        <inputEntry id="rule_unresolved_1"><text>-</text></inputEntry>
+        <inputEntry id="rule_unresolved_2"><text>-</text></inputEntry>
+        <inputEntry id="rule_unresolved_3"><text>-</text></inputEntry>
+        <inputEntry id="rule_unresolved_4"><text>-</text></inputEntry>
+        <outputEntry id="rule_unresolved_5"><text>"refuse"</text></outputEntry>
+        <outputEntry id="rule_unresolved_6"><text>"unresolved"</text></outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+</definitions>

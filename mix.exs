@@ -60,7 +60,8 @@ defmodule AshCompliance.MixProject do
       name: :ash_compliance,
       licenses: ["MIT"],
       maintainers: ["Luke Galea <luke@ideaforge.org>"],
-      files: ~w(lib documentation CHANGELOG.md LICENSE README.md usage-rules.md
+      files:
+        ~w(lib priv/processes priv/decisions documentation CHANGELOG.md LICENSE README.md usage-rules.md
         mix.exs .formatter.exs),
       links: %{
         "GitHub" => @source_url
@@ -95,6 +96,12 @@ defmodule AshCompliance.MixProject do
       {:phoenix_live_view, "~> 1.0"},
       # Dev / test
       {:oban, "~> 2.18", only: [:dev, :test]},
+      # The process templates ship as BPMN and DMN documents under priv/. The
+      # engines that compile and execute them are the host's; they are optional
+      # here and used in this package's tests to prove every shipped document
+      # compiles and verifies.
+      {:ash_bpmn, github: "lukegalea/ash_bpmn", optional: true, only: [:dev, :test]},
+      {:ash_decisions, github: "lukegalea/ash_decisions", optional: true, only: [:dev, :test]},
       {:stream_data, "~> 1.1"},
       {:simple_sat, "~> 0.1", only: [:dev, :test]},
       # LiveView tests need an HTML query engine. `lazy_html` rather than
@@ -119,6 +126,7 @@ defmodule AshCompliance.MixProject do
         "documentation/topics/oscal.md",
         "documentation/topics/ownership-and-freshness.md",
         "documentation/topics/boundary.md",
+        "documentation/topics/operator-processes.md",
         "documentation/topics/what-it-refuses.md",
         "CHANGELOG.md"
       ],
@@ -149,6 +157,15 @@ defmodule AshCompliance.MixProject do
         Ownership: [
           ~r/AshCompliance\.Ownership/,
           AshCompliance.Workers.EvidenceFreshness
+        ],
+        Processes: [
+          ~r/AshCompliance\.Processes/,
+          ~r/AshCompliance\.AccessReview/,
+          AshCompliance.Resources.ApprovalAttempt,
+          AshCompliance.Resources.AccessReviewCampaign,
+          AshCompliance.Resources.AccessReviewRow,
+          AshCompliance.Resources.AccessReviewDecision,
+          AshCompliance.Workers.ProcessOverdue
         ],
         Interop: [AshCompliance.Oscal, AshCompliance.Workers.NotifyProjectors],
         Internals: ~r/.*/

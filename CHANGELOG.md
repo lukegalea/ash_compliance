@@ -30,6 +30,18 @@ Requires Elixir 1.20 or later.
   `AshCompliance.Workers.EvidenceFreshness` Oban worker. Stale or missing evidence is
   `:unknown` and raises a finding; only an approved, expiring waiver silences it.
 
+- Operator process templates: nineteen BPMN documents and two DMN decisions under
+  `priv/`, a shared separation-of-duties decision that refuses self-approval and
+  approval through a delegation (every refusal is recorded as an
+  `ApprovalAttempt`), `Processes.Completion` which writes evidence only for a
+  finished and approved instance, and `Processes.Overdue` which raises a finding
+  for an overdue or unreadable task. `ash_bpmn` and `ash_decisions` are optional
+  dependencies used to compile and verify the shipped documents in tests.
+- `AccessReview`: campaigns that merge several `AccessReview.Source`s into one
+  effective-access row per person, with append-only sealed decisions. A source that
+  errors, is empty or is malformed makes the campaign incomplete, and an
+  incomplete or partly decided campaign cannot be closed.
+
 ### Changed:
 
 - **Bundles and rule sets compiled under a declared scheme can be stored.**

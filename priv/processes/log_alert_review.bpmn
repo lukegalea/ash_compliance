@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+SPDX-FileCopyrightText: 2026 Luke Galea
+SPDX-License-Identifier: MIT
+-->
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:ash="https://github.com/lukegalea/ash_bpmn/ns"
+                   id="Definitions_log_alert_review"
+                   targetNamespace="https://github.com/lukegalea/ash_compliance/processes">
+  <bpmn2:process id="Process_log_alert_review" name="Audit log and alert review" isExecutable="true">
+    <bpmn2:startEvent id="Start" name="Start">
+      <bpmn2:outgoing>Flow_2</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:serviceTask id="Service_1" name="Collect the alert and log summary">
+      <bpmn2:extensionElements><ash:taskConfig action="compliance.attach_evidence"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_2</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_4</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+    <bpmn2:userTask id="Task_3" name="Review the audit log and alerts">
+      <bpmn2:extensionElements><ash:taskConfig><ash:candidates><ash:candidate kind="role" of="security_reviewer"/></ash:candidates><ash:outcomes><ash:outcome name="reviewed"/><ash:outcome name="escalated"/><ash:outcome name="not_completed"/></ash:outcomes><ash:timers><ash:timer kind="remind" hours="56"/><ash:timer kind="escalate" hours="112"/><ash:timer kind="expire" days="7"/></ash:timers></ash:taskConfig></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_4</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_6</bpmn2:outgoing>
+    </bpmn2:userTask>
+    <bpmn2:exclusiveGateway id="Gateway_5" name="Review the audit log and alerts: finished?" default="Flow_7">
+      <bpmn2:incoming>Flow_6</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_7</bpmn2:outgoing>
+      <bpmn2:outgoing>Flow_9</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:endEvent id="End_not_completed" name="Not completed">
+      <bpmn2:extensionElements><ash:taskConfig outcome="not_completed"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_7</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:serviceTask id="Service_8" name="Record completion evidence">
+      <bpmn2:extensionElements><ash:taskConfig action="compliance.record_completion"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_9</bpmn2:incoming>
+      <bpmn2:outgoing>Flow_10</bpmn2:outgoing>
+    </bpmn2:serviceTask>
+    <bpmn2:endEvent id="End_completed" name="Completed">
+      <bpmn2:extensionElements><ash:taskConfig outcome="completed"/></bpmn2:extensionElements>
+      <bpmn2:incoming>Flow_10</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:sequenceFlow id="Flow_2" sourceRef="Start" targetRef="Service_1"/>
+    <bpmn2:sequenceFlow id="Flow_4" sourceRef="Service_1" targetRef="Task_3"/>
+    <bpmn2:sequenceFlow id="Flow_6" sourceRef="Task_3" targetRef="Gateway_5"/>
+    <bpmn2:sequenceFlow id="Flow_7" sourceRef="Gateway_5" targetRef="End_not_completed"/>
+    <bpmn2:sequenceFlow id="Flow_9" sourceRef="Gateway_5" targetRef="Service_8">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="feel">task.outcome = "reviewed" or task.outcome = "escalated"</bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="Flow_10" sourceRef="Service_8" targetRef="End_completed"/>
+  </bpmn2:process>
+</bpmn2:definitions>
