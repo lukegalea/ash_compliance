@@ -51,10 +51,10 @@ defmodule AshCompliance.Boundary.Codegen do
 
         written =
           Enum.map(pending, fn {name, content} ->
-          path = Path.join(dir, name)
-          File.write!(path, content)
-          path
-        end)
+            path = Path.join(dir, name)
+            File.write!(path, content)
+            path
+          end)
 
         written ++ stale_paths
     end
