@@ -78,6 +78,9 @@ defmodule AshCompliance.Boundary.Controls do
   def name, do: "AshCompliance.Boundary.Controls"
 
   @impl AshCompliance.Boundary.GeneratedFiles
+  def file_names, do: AshCompliance.Boundary.Controls.Render.file_names()
+
+  @impl AshCompliance.Boundary.GeneratedFiles
   def generated_files(module) do
     module |> AshCompliance.Boundary.Controls.Info.declaration() |> Render.files()
   end

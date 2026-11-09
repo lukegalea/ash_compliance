@@ -204,16 +204,38 @@ defmodule AshCompliance.BoundarySeamTest do
     end
   end
 
+  describe "a side removed from a declaration" do
+    test "--check fails while its generated files are still on disk, and a write removes them" do
+      dir = tmp_dir()
+      capture_io(fn -> Boundary.codegen(["--boundary", inspect(define(output_dir: dir))]) end)
+      assert Enum.sort(File.ls!(dir)) == Enum.sort(@production_names ++ @control_names)
+
+      alone = production_alone(output_dir: dir)
+
+      assert alone |> Codegen.run(check: true) |> Enum.map(&Path.basename/1) |> Enum.sort() ==
+               @control_names
+
+      assert_raise Ash.Error.Framework.PendingCodegen, fn ->
+        Boundary.codegen(["--check", "--boundary", inspect(alone)])
+      end
+
+      capture_io(fn -> Boundary.codegen(["--boundary", inspect(alone)]) end)
+      assert Enum.sort(File.ls!(dir)) == @production_names
+      assert :ok = Boundary.codegen(["--check", "--boundary", inspect(alone)])
+    end
+  end
+
   describe "the production side names no audit concept" do
     defp forbidden do
       [
-        {"Controls", ~r/\bControls\b/},
+        {"Controls", ~r/Controls/},
         {"audit", ~r/audit/i},
         {"criterion", ~r/criteri(on|a)/i},
         {"evidence", ~r/evidence/i},
         {"compliance", ~r/compliance/i},
-        {"controls as a section", ~r/\bcontrols\b/i},
-        {"a control module", ~r/\.Controls?\b/},
+        {"controls as a section", ~r/\bcontrols/i},
+        {"a control module", ~r/\.Controls?/},
+        {"a control-named module", ~r/(Boundary|\.)Control[A-Z]/},
         {"a control entity",
          ~r/\bcontrol\s+("|do\b|map\b|entity\b|section\b|option\b|link\b)|:control\b/}
       ]
@@ -225,9 +247,13 @@ defmodule AshCompliance.BoundarySeamTest do
       for {label, regex} <- forbidden(), Regex.match?(regex, stripped), do: label
     end
 
+    # Every boundary file except the controls extension itself: the
+    # `controls.ex` module and the `controls/` directory.
     defp production_files do
-      ["lib/ash_compliance/boundary.ex" | Path.wildcard("lib/ash_compliance/boundary/**/*.ex")]
-      |> Enum.reject(&String.starts_with?(&1, "lib/ash_compliance/boundary/controls"))
+      (Path.wildcard("lib/ash_compliance/boundary*.ex") ++
+         Path.wildcard("lib/ash_compliance/boundary/**/*.ex"))
+      |> Enum.reject(&(&1 == "lib/ash_compliance/boundary/controls.ex"))
+      |> Enum.reject(&String.starts_with?(&1, "lib/ash_compliance/boundary/controls/"))
       |> Enum.sort()
     end
 
@@ -257,6 +283,9 @@ defmodule AshCompliance.BoundarySeamTest do
                 ~s(control "CC1" do),
                 "AshCompliance.Boundary.Controls.Rules",
                 "control map",
+                "alias AshCompliance.Boundary.ControlMap",
+                "AshCompliance.Boundary.ControlsRender.files(x)",
+                "Boundary.ControlRules.violations(x)",
                 ":control"
               ] do
         assert violations(source <> "\n# #{word}\n") != [], "#{word} slipped through"
@@ -345,9 +374,12 @@ defmodule AshCompliance.BoundarySeamTest do
 
     test "a removed class value" do
       for class <- [":audited", ":excluded"] do
-        assert_raise Spark.Error.DslError, fn ->
-          define(environments: ["environment :production do\n class #{class}\n end"])
-        end
+        error =
+          assert_raise Spark.Error.DslError, fn ->
+            define(environments: ["environment :production do\n class #{class}\n end"])
+          end
+
+        assert Exception.message(error) =~ "class"
       end
     end
   end

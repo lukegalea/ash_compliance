@@ -14,6 +14,38 @@ defmodule AshCompliance.Boundary.GeneratedFiles do
   @doc "A map of file name to contents, rendered from the declaration `module`."
   @callback generated_files(module()) :: %{String.t() => String.t()}
 
+  @doc "The names of every file this extension can generate, for any declaration."
+  @callback file_names() :: [String.t()]
+
+  @optional_callbacks file_names: 0
+
+  @doc """
+  Files on disk in `dir` that an extension of this library owns but that the
+  declaration `module` no longer generates, because the extension was removed.
+  """
+  @spec stale(module(), String.t()) :: [String.t()]
+  def stale(module, dir) do
+    current = module |> files() |> Map.keys()
+
+    owned =
+      __MODULE__
+      |> Application.get_application()
+      |> Application.spec(:modules)
+      |> List.wrap()
+      |> Enum.filter(&implements?/1)
+      |> Enum.flat_map(& &1.file_names())
+
+    (owned -- current)
+    |> Enum.uniq()
+    |> Enum.sort()
+    |> Enum.filter(&File.exists?(Path.join(dir, &1)))
+  end
+
+  defp implements?(mod) do
+    Code.ensure_loaded?(mod) and function_exported?(mod, :file_names, 0) and
+      __MODULE__ in List.wrap(mod.module_info(:attributes)[:behaviour])
+  end
+
   @doc "Every file the declaration's extensions generate."
   @spec files(module()) :: %{String.t() => String.t()}
   def files(module) do

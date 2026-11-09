@@ -29,25 +29,34 @@ defmodule AshCompliance.Boundary.Codegen do
       |> Enum.sort()
       |> Enum.reject(fn {name, content} -> File.read(Path.join(dir, name)) == {:ok, content} end)
 
+    stale = GeneratedFiles.stale(module, dir)
+    pending_paths = Enum.map(pending, fn {name, _} -> Path.join(dir, name) end)
+    stale_paths = Enum.map(stale, &Path.join(dir, &1))
+
     cond do
       Keyword.get(opts, :check, false) ->
-        Enum.map(pending, fn {name, _} -> Path.join(dir, name) end)
+        pending_paths ++ stale_paths
 
       Keyword.get(opts, :dry_run, false) ->
         Enum.each(pending, fn {name, content} ->
           Mix.shell().info("# #{Path.join(dir, name)}\n#{content}")
         end)
 
-        Enum.map(pending, fn {name, _} -> Path.join(dir, name) end)
+        Enum.each(stale_paths, &Mix.shell().info("# remove #{&1}"))
+        pending_paths ++ stale_paths
 
       true ->
         File.mkdir_p!(dir)
+        Enum.each(stale_paths, &File.rm!/1)
 
-        Enum.map(pending, fn {name, content} ->
+        written =
+          Enum.map(pending, fn {name, content} ->
           path = Path.join(dir, name)
           File.write!(path, content)
           path
         end)
+
+        written ++ stale_paths
     end
   end
 
