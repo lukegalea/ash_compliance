@@ -177,6 +177,11 @@ defmodule AshCompliance.Domain do
       define(:list_findings, action: :read)
       define(:findings_for_organization, action: :for_organization, args: [:organization_id])
 
+      # The projection resource's own write surface, for findings raised
+      # outside the event log (`AshCompliance.Ownership.Sweep`).
+      define(:upsert_finding_grain, action: :upsert_grain)
+      define(:apply_finding_ops, action: :apply_projection_ops, args: [:ops])
+
       define(:noncompliant_findings,
         action: :noncompliant_for_organization,
         args: [:organization_id]

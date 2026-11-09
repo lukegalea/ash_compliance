@@ -117,6 +117,7 @@ defmodule AshCompliance.MixProject do
         "documentation/topics/layering-and-combining.md",
         "documentation/topics/the-projector.md",
         "documentation/topics/oscal.md",
+        "documentation/topics/ownership-and-freshness.md",
         "documentation/topics/what-it-refuses.md",
         "CHANGELOG.md"
       ],
@@ -142,6 +143,10 @@ defmodule AshCompliance.MixProject do
         "Status queries": [
           AshCompliance.Status,
           AshCompliance.FactBuilder
+        ],
+        Ownership: [
+          ~r/AshCompliance\.Ownership/,
+          AshCompliance.Workers.EvidenceFreshness
         ],
         Interop: [AshCompliance.Oscal, AshCompliance.Workers.NotifyProjectors],
         Internals: ~r/.*/
