@@ -137,12 +137,11 @@ defmodule AshCompliance.Resources.AccessReviewCampaign.Changes.RequireComplete d
   end
 
   defp summary(campaign, rows, decisions) do
-    effective =
+    counts =
       decisions
-      |> Enum.group_by(& &1.row_id)
-      |> Map.new(fn {row_id, list} -> {row_id, Enum.max_by(list, &{&1.decided_at, &1.id})} end)
-
-    counts = effective |> Map.values() |> Enum.frequencies_by(& &1.decision)
+      |> AshCompliance.AccessReview.Effective.latest_per_row()
+      |> Map.values()
+      |> Enum.frequencies_by(& &1.decision)
 
     %{
       "rows" => length(rows),

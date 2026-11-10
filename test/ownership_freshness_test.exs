@@ -260,6 +260,26 @@ defmodule AshCompliance.OwnershipFreshnessTest do
       assert sweep([waiver(%{expires_at: nil})]).silenced_by == nil
     end
 
+    test "a waiver longer than the maximum window does not silence" do
+      far = DateTime.add(@now, 365 * 86_400, :second)
+      assert sweep([waiver(%{expires_at: far})]).silenced_by == nil
+
+      limit = DateTime.add(hours_ago(1), Freshness.max_waiver_seconds(), :second)
+      assert sweep([waiver(%{expires_at: limit})]).silenced_by
+      assert sweep([waiver(%{expires_at: DateTime.add(limit, 1, :second)})]).silenced_by == nil
+    end
+
+    test "a waiver whose start is unknown is measured from its approval, and with neither does not silence" do
+      far = DateTime.add(@now, 365 * 86_400, :second)
+      assert sweep([waiver(%{starts_at: nil, approved_at: hours_ago(1)})]).silenced_by
+
+      assert sweep([waiver(%{starts_at: nil, approved_at: hours_ago(1), expires_at: far})]).silenced_by ==
+               nil
+
+      assert sweep([waiver(%{starts_at: nil})]).silenced_by == nil
+      assert sweep([waiver(%{starts_at: "yesterday", approved_at: nil})]).silenced_by == nil
+    end
+
     test "an override that has not started, for another rule, another kind or another scope does not silence" do
       assert sweep([waiver(%{starts_at: DateTime.add(@now, 60, :second)})]).silenced_by == nil
       assert sweep([waiver(%{rule_id: Freshness.rule_id("CC6.2")})]).silenced_by == nil

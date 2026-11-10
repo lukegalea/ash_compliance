@@ -273,14 +273,29 @@ defmodule AshCompliance.Ownership.Freshness do
 
   An override silences only when all of these hold: it is a waiver for
   `rule_id(criterion)`; it has a named approver; it has an expiry; it has
-  started; `now` is before the expiry; and it is scoped organization-wide or
-  to this criterion's freshness subject. An override missing any of these is
-  ignored, and one past its expiry stops silencing at that instant.
+  started; `now` is before the expiry; its expiry is no more than
+  `max_waiver_seconds/0` after its start (or, when the start is unknown, after
+  its approval); and it is scoped organization-wide or to this criterion's
+  freshness subject. An override missing any of these is ignored, and one past
+  its expiry stops silencing at that instant.
   """
   @spec silencer([term()], String.t(), DateTime.t()) :: term() | nil
   def silencer(overrides, criterion, %DateTime{} = now) do
     rule = rule_id(criterion)
     Enum.find(overrides, &silences?(&1, rule, now))
+  end
+
+  @max_waiver_seconds 90 * 86_400
+
+  @doc "The longest a waiver may run and still silence a criterion, in seconds."
+  @spec max_waiver_seconds() :: pos_integer()
+  def max_waiver_seconds, do: @max_waiver_seconds
+
+  defp within_window?(override, %DateTime{} = expires_at) do
+    case field(override, :starts_at) || field(override, :approved_at) do
+      %DateTime{} = from -> DateTime.diff(expires_at, from) <= @max_waiver_seconds
+      _ -> false
+    end
   end
 
   defp silences?(override, rule, now) do
@@ -293,6 +308,7 @@ defmodule AshCompliance.Ownership.Freshness do
       not blank?(field(override, :approver)) and
       match?(%DateTime{}, expires_at) and
       DateTime.compare(now, expires_at) == :lt and
+      within_window?(override, expires_at) and
       (is_nil(starts_at) or
          (match?(%DateTime{}, starts_at) and DateTime.compare(starts_at, now) != :gt)) and
       scope_matches?(override)

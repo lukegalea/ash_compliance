@@ -22,7 +22,9 @@ defmodule AshCompliance.Ownership.Check do
     * `:no_rationale` - a `not_applicable` row without a reason
     * `:no_evidence_producer` / `:unresolvable_producer`
     * `:no_process` / `:unresolvable_process` - recurring `ORG` and `HOST-APP` rows need one
-    * `:no_test_ref`
+    * `:no_test_ref` / `:unresolvable_test_ref` - every applicable row names a test that exists
+    * `:unproven_producer` - with `:require_producer_proof`, a producer that does not declare
+      the criterion it records evidence for
     * `:unwired_platform_row` - a `PLATFORM-*` row whose test or producer does not resolve
     * `:no_vendor_ref` / `:no_complementary_controls` - `VENDOR` rows
 
@@ -31,6 +33,12 @@ defmodule AshCompliance.Ownership.Check do
     * `:categories` - categories in the audit (default `[:security]`)
     * `:root` - directory `file:` references resolve against (default cwd)
     * `:resolver` - `(ref, root -> :ok | {:error, String.t()})`
+    * `:require_producer_proof` - when `true`, a producer that merely exists is
+      not enough: it must declare the criterion it records evidence for
+      (see `AshCompliance.Ownership.Resolver.proves_producer/2`). Default
+      `false`
+    * `:prover` - `(ref, criterion_id -> :ok | {:error, String.t()})`, used with
+      `:require_producer_proof`
   """
 
   alias AshCompliance.Ownership.{ControlFile, Criteria, Frequency, Resolver}
@@ -54,7 +62,12 @@ defmodule AshCompliance.Ownership.Check do
     categories = Keyword.get(opts, :categories, [:security])
     root = Keyword.get(opts, :root, File.cwd!())
     resolver = Keyword.get(opts, :resolver, &Resolver.resolve/2)
-    ctx = %{root: root, resolver: resolver, ids: row_ids(rows)}
+
+    prover =
+      if Keyword.get(opts, :require_producer_proof, false),
+        do: Keyword.get(opts, :prover, &Resolver.proves_producer/2)
+
+    ctx = %{root: root, resolver: resolver, prover: prover, ids: row_ids(rows)}
 
     in_scope = Criteria.in_categories(categories)
     by_id = rows |> Enum.filter(&is_map/1) |> Enum.group_by(&Map.get(&1, "id"))
@@ -197,7 +210,7 @@ defmodule AshCompliance.Ownership.Check do
       true ->
         case ctx.resolver.(producer, ctx.root) do
           :ok ->
-            []
+            proof_problems(id, producer, ctx)
 
           {:error, why} when platform? ->
             problem(id, :unwired_platform_row, "evidence producer: #{why}")
@@ -205,6 +218,15 @@ defmodule AshCompliance.Ownership.Check do
           {:error, why} ->
             problem(id, :unresolvable_producer, "evidence producer: #{why}")
         end
+    end
+  end
+
+  defp proof_problems(_id, _producer, %{prover: nil}), do: []
+
+  defp proof_problems(id, producer, %{prover: prover}) do
+    case prover.(producer, id) do
+      :ok -> []
+      {:error, why} -> problem(id, :unproven_producer, "evidence producer: #{why}")
     end
   end
 
@@ -239,7 +261,10 @@ defmodule AshCompliance.Ownership.Check do
         end
 
       true ->
-        []
+        case ctx.resolver.(test_ref, ctx.root) do
+          :ok -> []
+          {:error, why} -> problem(id, :unresolvable_test_ref, "test_ref: #{why}")
+        end
     end
   end
 
