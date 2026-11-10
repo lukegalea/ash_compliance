@@ -70,7 +70,7 @@ defmodule AshCompliance.Compiler.Resolver do
   # Structural refusals come first (a malformed or unscoped contribution is
   # refused whatever the context); then the scope filter drops contributions
   # that do not apply here. Dropped is not refused: a job-scoped removal is
-  # simply invisible to a PMC-level read.
+  # simply invisible to a client-level read.
   defp admit(contributions, scheme, context) do
     first? = scheme.precedence.refusals == :first
 

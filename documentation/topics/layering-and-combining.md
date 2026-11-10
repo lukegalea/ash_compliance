@@ -74,12 +74,12 @@ the job's context — and is never stored. Only a compiled, activated
 ### Scope and context
 
 A contribution may carry a `scope` (`%{property_group: id}`); a resolution
-runs against a `context` (`%{pmc: id, property_group: [ids], property: id,
+runs against a `context` (`%{client: id, property_group: [ids], property: id,
 contract: id, job: id}`). By default a scoped contribution applies when every
 scope key is present in the context with an overlapping value; an unscoped
 one applies everywhere. Contributions that do not match are *dropped*, not
 refused — which is what makes a removal narrow: a job-scoped exclusion is
-invisible to a PMC-level read, so it can never remove a rule at an outer
+invisible to a client-level read, so it can never remove a rule at an outer
 layer. A layer with a `scope_key` refuses unscoped contributions outright,
 because an unscoped job edit would otherwise apply to every job.
 

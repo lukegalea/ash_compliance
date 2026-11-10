@@ -90,10 +90,10 @@ defmodule AshCompliance.Compiler do
   @doc """
   Resolves `contributions` under `scheme` for `context`. Pure: no reads, no
   clock. "What does this job need?" is
-  `resolve(contributions, MyScheme, %{pmc: p, property_group: [g], job: j})`.
+  `resolve(contributions, MyScheme, %{client: p, property_group: [g], job: j})`.
 
   Contributions whose scope does not match the context are dropped (not
-  refused), so a job-level exclusion never narrows a PMC-level read.
+  refused), so a job-level exclusion never narrows a client-level read.
   """
   @spec resolve([contribution()], module(), Layering.context()) :: Resolution.t()
   def resolve(contributions, scheme \\ Layering.Default, context \\ %{}),

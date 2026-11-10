@@ -29,7 +29,7 @@ defmodule AshCompliance.DeclaredSchemeBundleTest do
     def layers do
       [
         [name: :ours, ops: [:add]],
-        [name: :pmc, ops: [:add, tighten: :self_and_outer], scope_key: :pmc]
+        [name: :client, ops: [:add, tighten: :self_and_outer], scope_key: :client]
       ]
     end
   end
@@ -40,7 +40,7 @@ defmodule AshCompliance.DeclaredSchemeBundleTest do
 
     @impl true
     def gather(opts) do
-      pmc = get_in(opts, [:context, :pmc])
+      client = get_in(opts, [:context, :client])
 
       rule =
         Rule.new(
@@ -65,12 +65,12 @@ defmodule AshCompliance.DeclaredSchemeBundleTest do
              source_id: "ours-gl"
            },
            %{
-             layer: :pmc,
+             layer: :client,
              op: :tighten,
              rule_id: "req.gl",
              params: %{min_amount: 3_000_000},
-             scope: %{pmc: pmc},
-             source_id: "pmc-gl"
+             scope: %{client: client},
+             source_id: "client-gl"
            }
          ],
          fact_schema:
@@ -103,14 +103,14 @@ defmodule AshCompliance.DeclaredSchemeBundleTest do
     end)
   end
 
-  defp compile_declared(org, pmc) do
+  defp compile_declared(org, client) do
     Domain.compile_policy_bundle!(
       %{
         organization_id: org,
         label: "requirements",
         scheme: TwoLayers,
         source: Source,
-        context: %{pmc: pmc}
+        context: %{client: client}
       },
       authorize?: false
     )
@@ -119,16 +119,20 @@ defmodule AshCompliance.DeclaredSchemeBundleTest do
   describe "PolicyBundle under a declared scheme" do
     test "records the scheme and the source's lineage, and binds the tightened param" do
       org = Ecto.UUID.generate()
-      pmc = Ecto.UUID.generate()
-      bundle = compile_declared(org, pmc)
+      client = Ecto.UUID.generate()
+      bundle = compile_declared(org, client)
 
       assert bundle.scheme == inspect(TwoLayers)
 
       assert {:ok, expected, _lineage} =
-               Compiler.compile(scheme: TwoLayers, source: Source, context: %{pmc: pmc})
+               Compiler.compile(scheme: TwoLayers, source: Source, context: %{client: client})
 
       assert bundle.content_hash == expected.content_hash
-      assert bundle.contributions |> stored([:layer]) |> Enum.map(& &1.layer) == ["ours", "pmc"]
+
+      assert bundle.contributions |> stored([:layer]) |> Enum.map(& &1.layer) == [
+               "ours",
+               "client"
+             ]
 
       {:ok, decoded} = AshRules.Ir.decode(bundle.rules_json)
       [rule] = decoded.rules
@@ -142,12 +146,12 @@ defmodule AshCompliance.DeclaredSchemeBundleTest do
             organization_id: Ecto.UUID.generate(),
             scheme: TwoLayers,
             source: NoLineage,
-            context: %{pmc: "p"}
+            context: %{client: "p"}
           },
           authorize?: false
         )
 
-      assert [%{rule_id: "req.gl", layer: "ours"}, %{rule_id: "req.gl", layer: "pmc"}] =
+      assert [%{rule_id: "req.gl", layer: "ours"}, %{rule_id: "req.gl", layer: "client"}] =
                stored(bundle.contributions, [:rule_id, :layer])
     end
 
@@ -185,21 +189,21 @@ defmodule AshCompliance.DeclaredSchemeBundleTest do
   describe "RuleSetRevision under a declared scheme" do
     test "sits at a layer of its scheme" do
       revision =
-        Support.rule_set_revision(layer: :pmc, scheme: inspect(TwoLayers), as_of: @now)
+        Support.rule_set_revision(layer: :client, scheme: inspect(TwoLayers), as_of: @now)
 
-      assert revision.layer == :pmc
+      assert revision.layer == :client
       assert revision.scheme == inspect(TwoLayers)
     end
 
     test "a layer outside its scheme is refused, and so is a default rank" do
-      assert_raise Ash.Error.Invalid, ~r/must be one of ours, pmc/, fn ->
+      assert_raise Ash.Error.Invalid, ~r/must be one of ours, client/, fn ->
         Support.rule_set_revision(layer: :global_mandatory, scheme: inspect(TwoLayers))
       end
     end
 
     test "with no scheme the layer is one of the six default ranks, as always" do
       assert_raise Ash.Error.Invalid, ~r/must be one of global_non_waivable/, fn ->
-        Support.rule_set_revision(layer: :pmc)
+        Support.rule_set_revision(layer: :client)
       end
     end
 
