@@ -7,6 +7,7 @@ defmodule Mix.Tasks.AshCompliance.Controls.Check do
 
       mix ash_compliance.controls.check
       mix ash_compliance.controls.check --file docs/controls.json --categories security,availability
+      mix ash_compliance.controls.check --require-producer-proof
       mix ash_compliance.controls.check --report
 
   Fails, naming each row, when an in-scope criterion has no row, no owner
@@ -23,6 +24,12 @@ defmodule Mix.Tasks.AshCompliance.Controls.Check do
       `availability`, `processing_integrity`, `confidentiality`, `privacy`
       (default `security`)
     * `--root` - directory `file:` references resolve against (default cwd)
+    * `--require-producer-proof` - a producer that merely exists is not enough:
+      its module must export `evidence_controls/0` listing the criterion it
+      records evidence for. Without it, an unwired producer passes this check
+      (the sweep still reads the row `:unknown`). Off by default so a host can
+      adopt the check first; turn it on once its producers declare their
+      criteria, and keep it on in CI.
     * `--report` - list every problem and exit 0, so a host can adopt the
       check before the file is finished. Without it, any problem exits non-zero.
 
@@ -41,14 +48,26 @@ defmodule Mix.Tasks.AshCompliance.Controls.Check do
   def run(args) do
     {opts, _rest} =
       OptionParser.parse!(args,
-        strict: [file: :string, categories: :string, root: :string, report: :boolean]
+        strict: [
+          file: :string,
+          categories: :string,
+          root: :string,
+          report: :boolean,
+          require_producer_proof: :boolean
+        ]
       )
 
     file = Keyword.get(opts, :file, "docs/controls.json")
     categories = parse_categories(Keyword.get(opts, :categories, "security"))
     root = Keyword.get(opts, :root, File.cwd!())
 
-    problems = Check.run(Path.expand(file, root), categories: categories, root: root)
+    problems =
+      Check.run(Path.expand(file, root),
+        categories: categories,
+        root: root,
+        require_producer_proof: Keyword.get(opts, :require_producer_proof, false)
+      )
+
     in_scope = length(Criteria.in_categories(categories))
 
     report(problems, file, in_scope)

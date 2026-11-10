@@ -84,6 +84,15 @@ defmodule AshCompliance.Resources.PolicyOverride do
     attribute(:rule_id, :string, allow_nil?: false, public?: true)
     attribute(:reason, :string, allow_nil?: false, public?: true)
     attribute(:approver, :string, allow_nil?: false, public?: true)
+
+    attribute(:requested_by, :string,
+      public?: true,
+      description:
+        "Who asked for the override. Required on create, and never the approver: " <>
+          "a person cannot approve their own exception. Nullable only for rows " <>
+          "written before the column existed, which never silence a criterion."
+    )
+
     attribute(:approved_at, :utc_datetime_usec, allow_nil?: false, public?: true)
 
     attribute(:scope_subject_type, :string, public?: true)
@@ -150,6 +159,7 @@ defmodule AshCompliance.Resources.PolicyOverride do
         :rule_id,
         :reason,
         :approver,
+        :requested_by,
         :approved_at,
         :scope_subject_type,
         :scope_subject_id,

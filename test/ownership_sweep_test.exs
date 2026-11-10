@@ -225,6 +225,7 @@ defmodule AshCompliance.OwnershipSweepTest do
             rule_id: Freshness.rule_id(criterion),
             reason: "documented exception",
             approver: "security-officer",
+            requested_by: "ops-engineer",
             approved_at: hours_ago(2),
             starts_at: hours_ago(1),
             expires_at: DateTime.add(@now, 3600, :second),
@@ -270,6 +271,7 @@ defmodule AshCompliance.OwnershipSweepTest do
                      rule_id: Freshness.rule_id("CC6.1"),
                      reason: "x",
                      approver: approver,
+                     requested_by: "ops-engineer",
                      approved_at: hours_ago(2),
                      starts_at: hours_ago(1),
                      expires_at: DateTime.add(@now, 3600, :second),
@@ -292,6 +294,7 @@ defmodule AshCompliance.OwnershipSweepTest do
                    rule_id: Freshness.rule_id("CC6.1"),
                    reason: "x",
                    approver: "someone",
+                   requested_by: "ops-engineer",
                    approved_at: hours_ago(2),
                    starts_at: hours_ago(1),
                    compensating_controls: ["m"]

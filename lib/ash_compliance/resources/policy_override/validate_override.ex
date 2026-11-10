@@ -4,7 +4,7 @@
 defmodule AshCompliance.Resources.PolicyOverride.ValidateOverride do
   @moduledoc """
   Waiver requirements, enforced as validations so an unaccountable waiver
-  cannot exist: bounded time, a named approver, compensating controls, and
+  cannot exist: bounded time, a named approver who is not the requester, compensating controls, and
   replacement rules for :replace overrides.
 
   Temporal-safe: reads arguments and attributes only — no clock, no side
@@ -22,6 +22,7 @@ defmodule AshCompliance.Resources.PolicyOverride.ValidateOverride do
     kind = Ash.Changeset.get_attribute(changeset, :kind)
 
     with :ok <- require_present(changeset),
+         :ok <- require_separation(changeset),
          :ok <- require_waiver_bounds(changeset, kind),
          :ok <- require_compensating_controls(changeset, kind) do
       require_replacement(changeset, kind)
@@ -35,6 +36,22 @@ defmodule AshCompliance.Resources.PolicyOverride.ValidateOverride do
       {:error, "an override requires a named approver"}
     else
       :ok
+    end
+  end
+
+  # The requester may not approve their own override: the same decision the
+  # operator processes ask, failing closed on anything but an explicit permit.
+  defp require_separation(changeset) do
+    requester = Ash.Changeset.get_attribute(changeset, :requested_by)
+    approver = Ash.Changeset.get_attribute(changeset, :approver)
+
+    verdict = AshCompliance.Processes.SeparationOfDuties.check(requester, approver, [])
+
+    if AshCompliance.Processes.SeparationOfDuties.permit?(verdict) do
+      :ok
+    else
+      {:error,
+       "an override must be requested by one person and approved by another (#{verdict.reason})"}
     end
   end
 

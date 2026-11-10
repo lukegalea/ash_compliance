@@ -134,7 +134,15 @@ defmodule AshCompliance.OwnershipFreshnessTest do
   test "a non-enforced row with no source is unknown; an enforced one is owned, not evidenced" do
     bare = %{"evidence_producer" => nil}
     assert_unknown(eval(Map.put(bare, "class", "ORG"), []), :no_source)
-    assert %{state: :owned} = eval(Map.put(bare, "class", "PLATFORM-ENFORCED"), [])
+    enforced = Map.put(bare, "class", "PLATFORM-ENFORCED")
+    assert %{state: :owned} = eval(Map.put(enforced, "test_ref", "file:test/x_test.exs"), [])
+  end
+
+  test "an enforced row with no test_ref is unknown, never owned" do
+    for blank <- [nil, "", "  "] do
+      row = %{"class" => "PLATFORM-ENFORCED", "evidence_producer" => nil, "test_ref" => blank}
+      assert_unknown(eval(row, []), :no_test_ref)
+    end
   end
 
   test "a recurring process that did not run is overdue and the row is unknown" do
@@ -212,6 +220,7 @@ defmodule AshCompliance.OwnershipFreshnessTest do
           kind: :waive,
           rule_id: Freshness.rule_id("CC6.1"),
           approver: "security-officer",
+          requested_by: "ops-engineer",
           reason: "documented",
           starts_at: hours_ago(1),
           expires_at: DateTime.add(@now, 3600, :second),
@@ -250,6 +259,20 @@ defmodule AshCompliance.OwnershipFreshnessTest do
       assert Enum.find(lapsed, &(&1.criterion == "CC6.1")).silenced_by == nil
     end
 
+    test "a waiver whose requester is its approver does not silence" do
+      for requester <- ["security-officer", " Security-Officer "] do
+        assert sweep([waiver(%{requested_by: requester})]).silenced_by == nil
+      end
+    end
+
+    test "a waiver with no recorded requester does not silence" do
+      for requester <- [nil, "", "  "] do
+        assert sweep([waiver(%{requested_by: requester})]).silenced_by == nil
+      end
+
+      assert sweep([Map.delete(waiver(%{}), :requested_by)]).silenced_by == nil
+    end
+
     test "an override with no approver does not silence" do
       for approver <- [nil, "", "   "] do
         assert sweep([waiver(%{approver: approver})]).silenced_by == nil
@@ -258,6 +281,26 @@ defmodule AshCompliance.OwnershipFreshnessTest do
 
     test "an override with no expiry does not silence" do
       assert sweep([waiver(%{expires_at: nil})]).silenced_by == nil
+    end
+
+    test "a waiver longer than the maximum window does not silence" do
+      far = DateTime.add(@now, 365 * 86_400, :second)
+      assert sweep([waiver(%{expires_at: far})]).silenced_by == nil
+
+      limit = DateTime.add(hours_ago(1), Freshness.max_waiver_seconds(), :second)
+      assert sweep([waiver(%{expires_at: limit})]).silenced_by
+      assert sweep([waiver(%{expires_at: DateTime.add(limit, 1, :second)})]).silenced_by == nil
+    end
+
+    test "a waiver whose start is unknown is measured from its approval, and with neither does not silence" do
+      far = DateTime.add(@now, 365 * 86_400, :second)
+      assert sweep([waiver(%{starts_at: nil, approved_at: hours_ago(1)})]).silenced_by
+
+      assert sweep([waiver(%{starts_at: nil, approved_at: hours_ago(1), expires_at: far})]).silenced_by ==
+               nil
+
+      assert sweep([waiver(%{starts_at: nil})]).silenced_by == nil
+      assert sweep([waiver(%{starts_at: "yesterday", approved_at: nil})]).silenced_by == nil
     end
 
     test "an override that has not started, for another rule, another kind or another scope does not silence" do

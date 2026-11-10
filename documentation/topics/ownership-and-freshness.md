@@ -69,6 +69,7 @@ rejects the key.
 ```
 mix ash_compliance.controls.check
 mix ash_compliance.controls.check --file docs/controls.json --categories security,availability
+mix ash_compliance.controls.check --require-producer-proof
 mix ash_compliance.controls.check --report
 ```
 
@@ -78,6 +79,24 @@ or producer does not resolve, a recurring `ORG` or `HOST-APP` row with no
 process, and a `VENDOR` row with no complementary controls. `--report` lists
 every problem and exits 0 so a host can adopt the check before the file is
 finished. A clean run says the file is complete, not that anything operates.
+
+### Turning on producer proof
+
+By default a producer passes when its module, Mix task or file exists. That
+proves the name resolves, not that anything records evidence, so a file can
+reach zero problems with no producer wired. A host turns the stronger check on
+with `--require-producer-proof` (or `require_producer_proof: true` to
+`Check.run/2`). Each `module:` or `mix:` producer must then export
+`evidence_controls/0`, returning the criterion ids it records artifacts for:
+
+```elixir
+def evidence_controls, do: ["CC6.1", "CC6.3"]
+```
+
+A `file:` producer can never declare this and is reported as
+`:unproven_producer`. Declare it in the same change that makes the producer
+call the evidence writer, and run the flag in CI. Rows whose producers have
+not been wired yet are the gap list.
 
 ## Evidence
 
@@ -123,7 +142,10 @@ event log, so a projector rebuild does not reproduce them; the next sweep does.
 
 The only way to silence a criterion is a `PolicyOverride` waiver for rule id
 `evidence-freshness:<criterion>` (`Freshness.rule_id/1`) with a named approver
-and an expiry. While it is in force no finding is raised and the result
+an expiry no more than 90 days after its start, and a recorded requester who
+is a different person from the approver (`PolicyOverride.requested_by`, checked
+by the same separation-of-duties decision the operator processes use; the
+create is refused otherwise). While it is in force no finding is raised and the result
 carries `silenced_by`; the criterion is still `:unknown`. At the expiry it
 stops silencing and the next sweep raises the finding again. An override with
-no approver or no expiry never silences.
+no approver, no expiry, a longer window, or no distinct requester never silences.

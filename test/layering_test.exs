@@ -306,6 +306,7 @@ defmodule AshCompliance.LayeringTest do
         rule_id: rule_id,
         reason: "documented operational exception",
         approver: "security-officer",
+        requested_by: "ops-engineer",
         approved_at: @now,
         starts_at: Keyword.get(opts, :starts_at, @now),
         expires_at: opts[:expires_at],
@@ -330,6 +331,7 @@ defmodule AshCompliance.LayeringTest do
         rule_id: rule_id,
         reason: "equivalent local control",
         approver: "security-officer",
+        requested_by: "ops-engineer",
         approved_at: @now,
         replacement_rules_json: json,
         compensating_controls: []

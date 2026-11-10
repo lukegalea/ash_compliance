@@ -43,6 +43,7 @@ defmodule AshCompliance.TemporalWaiverTest do
         rule_id: rule_id,
         reason: "documented operational exception",
         approver: "security-officer",
+        requested_by: "ops-engineer",
         approved_at: @now,
         starts_at: Keyword.get(opts, :starts_at, @now),
         expires_at: Keyword.get(opts, :expires_at, hours_after(@now, 24)),
@@ -102,6 +103,7 @@ defmodule AshCompliance.TemporalWaiverTest do
           rule_id: "kyc.welcome_review",
           reason: "equivalent local control",
           approver: "security-officer",
+          requested_by: "ops-engineer",
           approved_at: @now,
           replacement_rules_json:
             Support.bundle_json(AshCompliance.Test.RuleSets.TenantSupplement),
@@ -319,6 +321,7 @@ defmodule AshCompliance.TemporalWaiverTest do
           rule_id: "kyc.welcome_review",
           reason: "equivalent local control",
           approver: "security-officer",
+          requested_by: "ops-engineer",
           approved_at: @now,
           replacement_rules_json:
             Support.bundle_json(AshCompliance.Test.RuleSets.TenantSupplement),

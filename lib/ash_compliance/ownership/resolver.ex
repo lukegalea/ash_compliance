@@ -48,6 +48,43 @@ defmodule AshCompliance.Ownership.Resolver do
 
   def resolve(_ref, _root), do: {:error, "reference is missing or not a string"}
 
+  @doc """
+  Whether the producer `ref` declares that it records evidence for `criterion`.
+
+  A producer module (or Mix task module) proves it by exporting
+  `evidence_controls/0`, the list of criterion ids it records artifacts for.
+  Existing on the code path proves nothing, and a `file:` reference cannot
+  declare anything, so it is never proven.
+  """
+  @spec proves_producer(term(), String.t()) :: result()
+  def proves_producer("module:" <> name, criterion) when name != "",
+    do: declares(["Elixir." <> String.replace_prefix(name, "Elixir.", "")], name, criterion)
+
+  def proves_producer("mix:" <> task, criterion) when task != "" do
+    parts = task |> String.split(".") |> Enum.map(&Macro.camelize/1)
+    declares(["Elixir", "Mix", "Tasks" | parts], "mix task " <> task, criterion)
+  end
+
+  def proves_producer(ref, _criterion) when is_binary(ref),
+    do: {:error, "#{inspect(ref)} cannot declare that it records evidence"}
+
+  def proves_producer(_ref, _criterion), do: {:error, "reference is missing or not a string"}
+
+  defp declares(parts, label, criterion) do
+    module = parts |> Enum.reject(&(&1 == "Elixir")) |> Module.safe_concat()
+
+    with {:module, _} <- Code.ensure_loaded(module),
+         true <- function_exported?(module, :evidence_controls, 0),
+         ids when is_list(ids) <- module.evidence_controls(),
+         true <- criterion in ids do
+      :ok
+    else
+      _ -> {:error, "#{label} does not declare that it records evidence for #{criterion}"}
+    end
+  rescue
+    ArgumentError -> {:error, "#{label} is not on the code path"}
+  end
+
   defp beam_present?(beam, label) do
     case :code.where_is_file(String.to_charlist(beam)) do
       :non_existing -> {:error, "#{label} is not on the code path"}
