@@ -46,6 +46,14 @@ Requires Elixir 1.20 or later.
   errors, is empty or is malformed makes the campaign incomplete, and an
   incomplete or partly decided campaign cannot be closed.
 
+- `PolicyOverride.requested_by`, required on create and refused when equal to the approver
+  (the shared separation-of-duties decision). Hosts generate a migration for the nullable
+  column. A freshness waiver silences only with a distinct requester and a window of at most
+  90 days. `mix ash_compliance.controls.check --require-producer-proof` makes a producer
+  declare the criteria it records evidence for via `evidence_controls/0`; an enforced row
+  with no `test_ref` is `:unknown`, not `:owned`. The access-review close summary counts
+  the latest decision by instant, not by struct term order.
+
 ### Changed:
 
 - **Bundles and rule sets compiled under a declared scheme can be stored.**

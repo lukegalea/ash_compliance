@@ -19,6 +19,7 @@ defmodule AshCompliance.WaiverValidationTest do
       rule_id: "kyc.review_required",
       reason: "documented operational exception",
       approver: "security-officer",
+      requested_by: "ops-engineer",
       approved_at: @now,
       starts_at: @now,
       expires_at: DateTime.add(@now, 7 * 86_400, :second),
@@ -82,5 +83,46 @@ defmodule AshCompliance.WaiverValidationTest do
              AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
 
     assert Enum.any?(errors.errors, &(&1.message =~ "replacement_rules_json"))
+  end
+
+  describe "separation of duties" do
+    test "an approver who is the requester is refused, however it is spelled" do
+      for requester <- ["security-officer", " Security-Officer "] do
+        attrs = Map.put(base_attrs(), :requested_by, requester)
+
+        assert {:error, errors} =
+                 AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+
+        assert Enum.any?(errors.errors, &(&1.message =~ "one person and approved by another"))
+      end
+    end
+
+    test "a missing requester is refused" do
+      for requester <- [nil, "", "  "] do
+        attrs = Map.put(base_attrs(), :requested_by, requester)
+
+        assert {:error, _} =
+                 AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+      end
+
+      assert {:error, _} =
+               AshCompliance.Domain.create_policy_override(
+                 Map.delete(base_attrs(), :requested_by),
+                 authorize?: false
+               )
+    end
+
+    test "a replacement is held to the same rule" do
+      attrs =
+        Map.merge(base_attrs(), %{
+          kind: :replace,
+          expires_at: nil,
+          compensating_controls: [],
+          replacement_rules_json: "{}",
+          requested_by: "security-officer"
+        })
+
+      assert {:error, _} = AshCompliance.Domain.create_policy_override(attrs, authorize?: false)
+    end
   end
 end

@@ -134,7 +134,15 @@ defmodule AshCompliance.OwnershipFreshnessTest do
   test "a non-enforced row with no source is unknown; an enforced one is owned, not evidenced" do
     bare = %{"evidence_producer" => nil}
     assert_unknown(eval(Map.put(bare, "class", "ORG"), []), :no_source)
-    assert %{state: :owned} = eval(Map.put(bare, "class", "PLATFORM-ENFORCED"), [])
+    enforced = Map.put(bare, "class", "PLATFORM-ENFORCED")
+    assert %{state: :owned} = eval(Map.put(enforced, "test_ref", "file:test/x_test.exs"), [])
+  end
+
+  test "an enforced row with no test_ref is unknown, never owned" do
+    for blank <- [nil, "", "  "] do
+      row = %{"class" => "PLATFORM-ENFORCED", "evidence_producer" => nil, "test_ref" => blank}
+      assert_unknown(eval(row, []), :no_test_ref)
+    end
   end
 
   test "a recurring process that did not run is overdue and the row is unknown" do
@@ -212,6 +220,7 @@ defmodule AshCompliance.OwnershipFreshnessTest do
           kind: :waive,
           rule_id: Freshness.rule_id("CC6.1"),
           approver: "security-officer",
+          requested_by: "ops-engineer",
           reason: "documented",
           starts_at: hours_ago(1),
           expires_at: DateTime.add(@now, 3600, :second),
@@ -248,6 +257,20 @@ defmodule AshCompliance.OwnershipFreshnessTest do
 
       lapsed = Freshness.evaluate_all(loaded(rows()), %{}, now: expiry, overrides: [override])
       assert Enum.find(lapsed, &(&1.criterion == "CC6.1")).silenced_by == nil
+    end
+
+    test "a waiver whose requester is its approver does not silence" do
+      for requester <- ["security-officer", " Security-Officer "] do
+        assert sweep([waiver(%{requested_by: requester})]).silenced_by == nil
+      end
+    end
+
+    test "a waiver with no recorded requester does not silence" do
+      for requester <- [nil, "", "  "] do
+        assert sweep([waiver(%{requested_by: requester})]).silenced_by == nil
+      end
+
+      assert sweep([Map.delete(waiver(%{}), :requested_by)]).silenced_by == nil
     end
 
     test "an override with no approver does not silence" do

@@ -307,6 +307,7 @@ defmodule AshCompliance.ProjectorDrainTest do
           rule_id: "kyc.review_required",
           reason: "documented operational exception",
           approver: "security-officer",
+          requested_by: "ops-engineer",
           approved_at: now,
           starts_at: now,
           expires_at: DateTime.add(now, 24 * 3600, :second),
