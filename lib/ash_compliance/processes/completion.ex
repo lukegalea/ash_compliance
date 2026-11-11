@@ -48,8 +48,8 @@ defmodule AshCompliance.Processes.Completion do
   Records completion evidence for `template_key`.
 
   Options: `:collector` (required), `:now`, `:collected_at`, `:actor`,
-  `:authorize?`, `:retention_class` and `:location`; the last four go to the
-  evidence writer.
+  `:authorize?`, `:retention_class`, `:location` and `:store_content`; the last five go
+  to the evidence writer.
   """
   @spec complete(String.t(), String.t(), attrs(), keyword()) ::
           {:ok, [struct()]} | {:error, term()}
@@ -130,7 +130,15 @@ defmodule AshCompliance.Processes.Completion do
 
       writer_opts =
         opts
-        |> Keyword.take([:now, :collected_at, :actor, :authorize?, :retention_class, :location])
+        |> Keyword.take([
+          :now,
+          :collected_at,
+          :actor,
+          :authorize?,
+          :retention_class,
+          :location,
+          :store_content
+        ])
         |> Keyword.merge(
           producer: collector,
           media_type: "application/json",
