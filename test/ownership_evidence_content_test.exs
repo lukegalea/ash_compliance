@@ -23,10 +23,14 @@ defmodule AshCompliance.OwnershipEvidenceContentTest do
     )
   end
 
-  test "content is not stored unless asked for" do
+  test "content is stored by default, and a hash-only artifact does not verify" do
     assert {:ok, artifact} = record("{\"a\":1}")
-    assert artifact.content == nil
-    assert {:error, :no_content} = Evidence.verify(artifact)
+    assert artifact.content == "{\"a\":1}"
+    assert :ok = Evidence.verify(artifact)
+
+    assert {:ok, bare} = record("{\"a\":2}", store_content: false)
+    assert bare.content == nil
+    assert {:error, :no_content} = Evidence.verify(bare)
   end
 
   test "store_content keeps the bytes and verify re-checks them against the hash" do

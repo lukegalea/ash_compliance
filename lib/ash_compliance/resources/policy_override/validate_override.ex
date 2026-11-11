@@ -14,6 +14,8 @@ defmodule AshCompliance.Resources.PolicyOverride.ValidateOverride do
 
   use Ash.Resource.Validation
 
+  alias AshCompliance.Resources.PolicyOverride.WaiverChain
+
   @impl true
   def temporal_safe?(_opts), do: true
 
@@ -24,6 +26,7 @@ defmodule AshCompliance.Resources.PolicyOverride.ValidateOverride do
     with :ok <- require_present(changeset),
          :ok <- require_separation(changeset),
          :ok <- require_waiver_bounds(changeset, kind),
+         :ok <- require_chain_within_limit(changeset, kind),
          :ok <- require_compensating_controls(changeset, kind) do
       require_replacement(changeset, kind)
     end
@@ -78,6 +81,43 @@ defmodule AshCompliance.Resources.PolicyOverride.ValidateOverride do
   end
 
   defp require_waiver_bounds(_changeset, _kind), do: :ok
+
+  # The limit applies to a chain of waivers, not to each row: a waiver starting within the
+  # renewal gap of the previous one (same organization, rule and scope) continues its chain,
+  # and the chain as a whole may not exceed the maximum. Fails closed when the history cannot
+  # be read.
+  defp require_chain_within_limit(changeset, :waive) do
+    expires_at = Ash.Changeset.get_argument(changeset, :expires_at)
+    starts_at = effective_starts_at(changeset)
+
+    if match?(%DateTime{}, expires_at) and match?(%DateTime{}, starts_at) do
+      key = %{
+        organization_id: Ash.Changeset.get_attribute(changeset, :organization_id),
+        rule_id: Ash.Changeset.get_attribute(changeset, :rule_id),
+        scope_key:
+          AshCompliance.Resources.PolicyOverride.Changes.DeriveScopeKey.scope_key(changeset)
+      }
+
+      case WaiverChain.start_of_chain(key, starts_at) do
+        {:ok, chain_start} ->
+          limit = AshCompliance.Ownership.Freshness.max_waiver_seconds()
+
+          if DateTime.diff(expires_at, chain_start) <= limit,
+            do: :ok,
+            else:
+              {:error,
+               "waivers for one rule and scope may not be chained past #{div(limit, 86_400)} days: " <>
+                 "let the waiver lapse for #{div(AshCompliance.Ownership.Freshness.renewal_gap_seconds(), 3600)} hours and approve it again"}
+
+        {:error, _} ->
+          {:error, "the waiver history could not be read, so the chain limit cannot be checked"}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp require_chain_within_limit(_changeset, _kind), do: :ok
 
   # The period's lower bound: an explicit `starts_at` argument, else the
   # write's pinned instant (set by `Changes.BoundWindow` from the argument,

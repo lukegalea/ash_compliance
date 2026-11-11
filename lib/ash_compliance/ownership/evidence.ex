@@ -11,10 +11,12 @@ defmodule AshCompliance.Ownership.Evidence do
   evaluator only counts artifacts from the producer a row declares.
 
   Append-only: `EvidenceArtifact` has `create` and `read` actions and no
-  update or destroy, so a correction is a new artifact. The content itself is
-  not stored unless the caller passes `store_content: true`; the row pins its
-  hash either way. Stored bytes are checked against the hash at create, and
-  `verify/1` re-checks them later.
+  update or destroy, so a correction is a new artifact. The content is stored on
+  the row by default, because the freshness sweep counts an artifact as evidence
+  only while `verify/1` still passes: the bytes are present and hash to the row's
+  hash. Pass `store_content: false` to keep only the hash (the artifact then pins
+  an identity but never counts as evidence). Stored bytes are also checked against
+  the hash at create.
 
   Nothing is recorded when collection fails. A producer that errors, raises,
   or returns empty content leaves no artifact behind, so the control reads as
@@ -36,7 +38,7 @@ defmodule AshCompliance.Ownership.Evidence do
   `:method` (`:examine`, `:interview` or `:test`; default `:examine`),
   `:collected_at` (default now), `:now`, `:subject_type`, `:subject_id`,
   `:retention_class`, `:location`, `:actor`, `:authorize?`, `:store_content`
-  (default `false`; keep the bytes on the row).
+  (default `true`; keep the bytes on the row, without which the artifact is not evidence).
 
   Returns `{:error, reason}` for empty content, a blank producer, an invalid
   organization id, or a collection time later than now plus a small skew.
@@ -59,7 +61,7 @@ defmodule AshCompliance.Ownership.Evidence do
         subject_type: opts[:subject_type],
         subject_id: opts[:subject_id],
         hash: sha256(content),
-        content: if(Keyword.get(opts, :store_content, false) == true, do: content),
+        content: if(Keyword.get(opts, :store_content, true) == true, do: content),
         media_type: Keyword.get(opts, :media_type, "application/octet-stream"),
         collector: producer,
         method: Keyword.get(opts, :method, :examine),

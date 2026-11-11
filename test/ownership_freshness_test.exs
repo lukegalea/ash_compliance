@@ -92,6 +92,29 @@ defmodule AshCompliance.OwnershipFreshnessTest do
     end
   end
 
+  test "an artifact whose bytes are missing, empty or altered is not evidence" do
+    for missing <- [nil, ""] do
+      assert_unknown(
+        eval(%{}, [artifact(@producer, hours_ago(1), %{content: missing})]),
+        :no_content
+      )
+    end
+
+    bare = Map.delete(artifact(@producer, hours_ago(1)), :content)
+    assert_unknown(eval(%{}, [bare]), :no_content)
+
+    assert_unknown(
+      eval(%{}, [artifact(@producer, hours_ago(1), %{content: "tampered"})]),
+      :hash_mismatch
+    )
+  end
+
+  test "a good older artifact still counts when a newer one fails verification" do
+    good = artifact(@producer, hours_ago(3))
+    bad = artifact(@producer, hours_ago(1), %{content: "tampered"})
+    assert %{state: :evidenced} = eval(%{}, [bad, good])
+  end
+
   test "an artifact from a producer the row does not declare is unknown" do
     assert_unknown(eval(%{}, [artifact("module:Other", hours_ago(1))]), :no_evidence)
   end
