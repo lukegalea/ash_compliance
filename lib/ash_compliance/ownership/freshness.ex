@@ -215,14 +215,23 @@ defmodule AshCompliance.Ownership.Freshness do
   defp worst_invalid(classified) do
     reasons = for {:error, reason} <- classified, do: reason
 
-    Enum.find([:malformed_timestamp, :malformed_artifact, :future_dated], &(&1 in reasons)) ||
+    order = [
+      :malformed_timestamp,
+      :malformed_artifact,
+      :future_dated,
+      :hash_mismatch,
+      :no_content
+    ]
+
+    Enum.find(order, &(&1 in reasons)) ||
       :malformed_artifact
   end
 
   defp classify(artifact, now) do
     with {:ok, at} <- parse_time(field(artifact, :collected_at)),
          :ok <- check_hash(field(artifact, :hash)),
-         :ok <- check_not_future(at, now) do
+         :ok <- check_not_future(at, now),
+         :ok <- check_content(artifact) do
       {:ok, at}
     end
   end
@@ -240,6 +249,15 @@ defmodule AshCompliance.Ownership.Freshness do
 
   defp check_hash(hash),
     do: if(Evidence.hash?(hash), do: :ok, else: {:error, :malformed_artifact})
+
+  # The row is evidence only while the bytes it pins are still there and still hash to it.
+  # An artifact with no bytes, or with bytes that no longer match, is never a pass.
+  defp check_content(artifact) do
+    case Evidence.verify(%{content: field(artifact, :content), hash: field(artifact, :hash)}) do
+      :ok -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
   defp check_not_future(at, now) do
     if DateTime.diff(at, now) > Evidence.skew_seconds(), do: {:error, :future_dated}, else: :ok
@@ -293,6 +311,19 @@ defmodule AshCompliance.Ownership.Freshness do
   @doc "The longest a waiver may run and still silence a criterion, in seconds."
   @spec max_waiver_seconds() :: pos_integer()
   def max_waiver_seconds, do: @max_waiver_seconds
+
+  @renewal_gap_seconds 86_400
+
+  @doc """
+  How long a waiver must have lapsed before a new one for the same organization, rule and
+  scope starts a new chain, in seconds.
+
+  A waiver starting closer than this to the end of the previous one continues its chain, and
+  the whole chain may not run past `max_waiver_seconds/0` (`PolicyOverride` refuses the
+  create). Renewing therefore means letting the rule go unsilenced, which files a finding.
+  """
+  @spec renewal_gap_seconds() :: pos_integer()
+  def renewal_gap_seconds, do: @renewal_gap_seconds
 
   defp within_window?(override, %DateTime{} = expires_at) do
     case field(override, :starts_at) || field(override, :approved_at) do

@@ -39,7 +39,12 @@ defmodule AshCompliance.Test.OwnershipFixtures do
 
   def artifact(collector, collected_at, overrides \\ %{}) do
     Map.merge(
-      %{collector: collector, collected_at: collected_at, hash: Evidence.sha256("content")},
+      %{
+        collector: collector,
+        collected_at: collected_at,
+        hash: Evidence.sha256("content"),
+        content: "content"
+      },
       overrides
     )
   end

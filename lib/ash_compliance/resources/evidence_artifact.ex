@@ -6,9 +6,10 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
   An immutable reference to evidence supporting a control's operation,
   per SP 800-53A assessment methods.
 
-  The artifact itself may live outside the compliance system, or the writer can keep
-  its bytes in `content` (`store_content: true`); either way this row pins its
-  identity: the content hash, media type, collector, the assessment method it
+  The writer keeps the bytes in `content` by default (`store_content: false` keeps only
+  the hash). The freshness sweep counts an artifact as evidence only while those bytes are
+  present and hash to `hash`; a hash-only artifact, or one whose bytes were altered, is
+  never a pass. Either way this row pins its identity: the content hash, media type, collector, the assessment method it
   supports (`examine`, `interview`, or `test`), the chain of custody as an
   append-only list of custody entries, and the retention class.
 

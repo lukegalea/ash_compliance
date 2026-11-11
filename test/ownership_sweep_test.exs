@@ -178,6 +178,30 @@ defmodule AshCompliance.OwnershipSweepTest do
       assert Enum.all?(results, &(&1.reason == :control_file_malformed))
     end
 
+    test "an artifact with no stored bytes is not evidence, and files a finding", %{org: org} do
+      record!(org, "CC6.1", store_content: false)
+      {:ok, results} = sweep(org, controls_file())
+
+      assert %{state: :unknown, reason: :no_content} =
+               Enum.find(results, &(&1.criterion == "CC6.1"))
+
+      assert freshness_finding(org, "CC6.1").resolved_at == nil
+    end
+
+    test "bytes altered in the database after recording are not evidence", %{org: org} do
+      record!(org, "CC6.1")
+      {:ok, results} = sweep(org, controls_file())
+      assert %{state: :evidenced} = Enum.find(results, &(&1.criterion == "CC6.1"))
+
+      TestRepo.query!("update ash_compliance_evidence_artifacts set content = 'tampered'")
+      {:ok, results} = sweep(org, controls_file())
+
+      assert %{state: :unknown, reason: :hash_mismatch} =
+               Enum.find(results, &(&1.criterion == "CC6.1"))
+
+      assert freshness_finding(org, "CC6.1").resolved_at == nil
+    end
+
     test "fresh evidence resolves the finding but never says compliant", %{org: org} do
       {:ok, _} = sweep(org, controls_file())
       assert freshness_finding(org, "CC6.1").resolved_at == nil
