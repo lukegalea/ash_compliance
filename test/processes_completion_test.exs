@@ -84,7 +84,11 @@ defmodule AshCompliance.ProcessesCompletionTest do
                store_content: true
              )
 
-    assert Enum.all?(written, &(&1.organization_id == operator_org and Evidence.verify(&1) == :ok))
+    assert Enum.all?(
+             written,
+             &(&1.organization_id == operator_org and Evidence.verify(&1) == :ok)
+           )
+
     assert artifacts(org, "CC6.2") == []
   end
 
