@@ -13,6 +13,7 @@ defmodule AshCompliance.ProcessesCompletionTest do
   import AshCompliance.Test.OwnershipFixtures
 
   alias AshCompliance.Domain
+  alias AshCompliance.Ownership.Evidence
   alias AshCompliance.Ownership.Freshness
   alias AshCompliance.Processes.{Approval, Completion, Templates}
 
@@ -68,6 +69,27 @@ defmodule AshCompliance.ProcessesCompletionTest do
       assert artifact.media_type == "application/json"
       assert byte_size(artifact.hash) == 64
     end
+  end
+
+  test "approvals_organization_id files the evidence under one organization and finds the approval in another",
+       %{org: org, instance: i} do
+    operator_org = Ecto.UUID.generate()
+    approve!(org, i)
+
+    assert {:error, :no_recorded_approval} = complete(operator_org, "access_request", attrs(i))
+
+    assert {:ok, written} =
+             complete(operator_org, "access_request", attrs(i),
+               approvals_organization_id: org,
+               store_content: true
+             )
+
+    assert Enum.all?(
+             written,
+             &(&1.organization_id == operator_org and Evidence.verify(&1) == :ok)
+           )
+
+    assert artifacts(org, "CC6.2") == []
   end
 
   test "the artifact content pins the template, the approvals and the summary", %{

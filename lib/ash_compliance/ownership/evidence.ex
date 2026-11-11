@@ -12,7 +12,9 @@ defmodule AshCompliance.Ownership.Evidence do
 
   Append-only: `EvidenceArtifact` has `create` and `read` actions and no
   update or destroy, so a correction is a new artifact. The content itself is
-  not stored here; the row pins its hash.
+  not stored unless the caller passes `store_content: true`; the row pins its
+  hash either way. Stored bytes are checked against the hash at create, and
+  `verify/1` re-checks them later.
 
   Nothing is recorded when collection fails. A producer that errors, raises,
   or returns empty content leaves no artifact behind, so the control reads as
@@ -33,7 +35,8 @@ defmodule AshCompliance.Ownership.Evidence do
   collector). Optional: `:media_type` (default `"application/octet-stream"`),
   `:method` (`:examine`, `:interview` or `:test`; default `:examine`),
   `:collected_at` (default now), `:now`, `:subject_type`, `:subject_id`,
-  `:retention_class`, `:location`, `:actor`, `:authorize?`.
+  `:retention_class`, `:location`, `:actor`, `:authorize?`, `:store_content`
+  (default `false`; keep the bytes on the row).
 
   Returns `{:error, reason}` for empty content, a blank producer, an invalid
   organization id, or a collection time later than now plus a small skew.
@@ -56,6 +59,7 @@ defmodule AshCompliance.Ownership.Evidence do
         subject_type: opts[:subject_type],
         subject_id: opts[:subject_id],
         hash: sha256(content),
+        content: if(Keyword.get(opts, :store_content, false) == true, do: content),
         media_type: Keyword.get(opts, :media_type, "application/octet-stream"),
         collector: producer,
         method: Keyword.get(opts, :method, :examine),
@@ -95,6 +99,20 @@ defmodule AshCompliance.Ownership.Evidence do
       {:error, reason} -> {:error, {:producer_failed, reason}}
     end
   end
+
+  @doc """
+  Re-checks an artifact's stored bytes against its hash.
+
+  `:ok` only when the row holds non-empty bytes whose SHA-256 equals `hash`. An artifact
+  with no stored bytes is `{:error, :no_content}`, and bytes that differ are
+  `{:error, :hash_mismatch}`: neither is a pass.
+  """
+  @spec verify(struct()) :: :ok | {:error, :no_content | :hash_mismatch}
+  def verify(%{content: content, hash: hash}) when is_binary(content) and content != "" do
+    if sha256(content) == hash, do: :ok, else: {:error, :hash_mismatch}
+  end
+
+  def verify(_artifact), do: {:error, :no_content}
 
   @doc "Lower-case hex SHA-256 of `content`."
   @spec sha256(binary()) :: String.t()

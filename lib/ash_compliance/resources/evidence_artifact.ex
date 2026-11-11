@@ -6,7 +6,8 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
   An immutable reference to evidence supporting a control's operation,
   per SP 800-53A assessment methods.
 
-  The artifact itself lives outside the compliance system — this row pins its
+  The artifact itself may live outside the compliance system, or the writer can keep
+  its bytes in `content` (`store_content: true`); either way this row pins its
   identity: the content hash, media type, collector, the assessment method it
   supports (`examine`, `interview`, or `test`), the chain of custody as an
   append-only list of custody entries, and the retention class.
@@ -29,6 +30,12 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
       allow_nil?: false,
       public?: true,
       description: "SHA-256 (hex) of the artifact content."
+    )
+
+    attribute(:content, :binary,
+      public?: true,
+      description:
+        "The bytes the hash pins, when the writer was asked to keep them. Never changes after create."
     )
 
     attribute(:media_type, :string, allow_nil?: false, public?: true)
@@ -64,6 +71,7 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
         :subject_type,
         :subject_id,
         :hash,
+        :content,
         :media_type,
         :collector,
         :method,
@@ -75,6 +83,8 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
       validate attribute_does_not_equal(:hash, "") do
         message("the artifact hash must be non-empty")
       end
+
+      validate(AshCompliance.Resources.EvidenceArtifact.Validations.ContentMatchesHash)
     end
 
     read :get_by_id do

@@ -18,6 +18,10 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
+- `Processes.Completion.complete/4` option `:approvals_organization_id`: judge the permitted approval in one organization while filing the evidence in another.
+
+- `EvidenceArtifact.content` and `Evidence.record(..., store_content: true)`: an artifact can keep the bytes its hash pins. Stored bytes must match the hash at create; `Evidence.verify/1` re-checks them. Off by default; existing rows are unchanged. Requires a host migration adding a nullable `content` binary column.
+
 - `AshCompliance.Boundary`: a Spark extension that declares environments (`:production`, or
   `:non_production` under a data ceiling) and resources (managed or data source). It knows
   nothing about audits. `mix ash.codegen` writes `boundary.auto.tfvars.json`,

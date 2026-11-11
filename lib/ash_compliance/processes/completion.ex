@@ -48,8 +48,9 @@ defmodule AshCompliance.Processes.Completion do
   Records completion evidence for `template_key`.
 
   Options: `:collector` (required), `:now`, `:collected_at`, `:actor`,
-  `:authorize?`, `:retention_class` and `:location`; the last four go to the
-  evidence writer.
+  `:authorize?`, `:retention_class`, `:location` and `:store_content`; the last five go
+  to the evidence writer. `:approvals_organization_id` names the organization the permitted
+  `ApprovalAttempt` is looked up under, when it is not the one the evidence is filed under.
   """
   @spec complete(String.t(), String.t(), attrs(), keyword()) ::
           {:ok, [struct()]} | {:error, term()}
@@ -58,11 +59,17 @@ defmodule AshCompliance.Processes.Completion do
          :ok <- outcome(attrs),
          {:ok, instance_id} <- present(attrs, :instance_id),
          {:ok, completed_by} <- present(attrs, :completed_by),
-         {:ok, approvals} <- approvals(organization_id, template, instance_id, opts),
+         {:ok, approvals} <-
+           approvals(approvals_org(organization_id, opts), template, instance_id, opts),
          {:ok, summary} <- summary(attrs) do
       record_all(organization_id, template, instance_id, completed_by, approvals, summary, opts)
     end
   end
+
+  # The approval is judged where it was recorded, which can differ from where the evidence is
+  # filed (a customer's tenant records the decision; the operator files the evidence).
+  defp approvals_org(organization_id, opts),
+    do: Keyword.get(opts, :approvals_organization_id) || organization_id
 
   defp template(key) do
     case Templates.get(key) do
@@ -130,7 +137,15 @@ defmodule AshCompliance.Processes.Completion do
 
       writer_opts =
         opts
-        |> Keyword.take([:now, :collected_at, :actor, :authorize?, :retention_class, :location])
+        |> Keyword.take([
+          :now,
+          :collected_at,
+          :actor,
+          :authorize?,
+          :retention_class,
+          :location,
+          :store_content
+        ])
         |> Keyword.merge(
           producer: collector,
           media_type: "application/json",
