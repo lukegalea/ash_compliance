@@ -82,7 +82,7 @@ defmodule AshCompliance.MixProject do
       {:ash_postgres, "~> 2.14"},
       {:spark, "~> 2.0", runtime: false},
       # The event log and the projector engine the ComplianceProjector runs on.
-      {:ash_events, "~> 0.7.0"},
+      {:ash_events, "~> 0.8"},
       {:ash_events_projections, github: "lukegalea/ash_events_projections"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
