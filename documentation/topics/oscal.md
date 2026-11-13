@@ -6,8 +6,9 @@ SPDX-License-Identifier: MIT
 # OSCAL
 
 `ash_compliance` speaks a tolerant subset of OSCAL JSON at its boundary and
-keeps a relational model inside. v1 scope: catalogs and profiles only
-(component definitions and assessment plans are out).
+keeps a relational model inside. Catalogs and profiles go in and out;
+assessment results go out (see below). Component definitions and assessment
+plans are out.
 
 ## Import
 
@@ -98,3 +99,66 @@ mix ash_compliance.export_oscal --type profile --id <uuid>
 Export reconstructs the document from the relational model: document uuid,
 metadata, controls with their active revision's statement/params/citations,
 and (for profiles) the latest revision's stored operations.
+
+## Assessment results
+
+An auditor's package for one organization and one period is two calls:
+
+```elixir
+{:ok, sections} =
+  AshCompliance.Ownership.Package.sections(org_id, from, to,
+    controls_file: "path/to/controls.json",
+    categories: [:security, :availability],
+    extra_observations: [...],
+    extra_findings: [...]
+  )
+
+document =
+  AshCompliance.Oscal.AssessmentResults.build(sections, %{
+    namespace: "urn:example:audit-package"
+  })
+```
+
+`sections/4` composes what the compliance plane holds and writes nothing:
+the criteria in scope with the control file's row for each, every artifact
+collected in the period from the hot table and the evidence archive alike,
+each re-checked against its hash, each criterion's freshness at the end of the
+period with the waivers in force then, and the findings open at any time in
+the period. Freshness is evaluated at the earlier of `to` and `generated_at`.
+
+`build/2` turns the sections into an OSCAL 1.2.3 assessment-results document
+with one result for the period:
+
+* an observation for every artifact collected in the period, with the
+  artifact's assessment method, and one for each criterion's freshness;
+* a `not-satisfied` finding for every criterion whose freshness is unknown
+  (reason `other`), and for every open finding that is not compliant (reason
+  `fail` when noncompliant, `other` otherwise).
+
+The document **never says `satisfied`**. The package answers owned,
+evidenced or unknown; only an auditor attests. An evidenced criterion has
+observations and no finding.
+
+The organization, period and generation time come from the sections unless
+`meta` overrides them. Every identifier is a version 5 UUID derived from what
+it names, so the same inputs always give the same document. Facts OSCAL has no field for travel as
+properties in `meta.namespace`.
+
+### The host's part
+
+Who may export, and for which organization, is decided by the host before it
+calls `sections/4`. The control file is the host's. Anything the compliance
+plane cannot observe itself (an audit-log verification, the review tasks of a
+process engine) goes in as plain maps:
+
+* `extra_observations`: `%{id:, title:, description:, methods:, collected:}`,
+  with optional `props:` and `relevant_evidence:`;
+* `extra_findings`: `%{id:, title:, description:, control_id:, reason:}`,
+  where `reason` is `:fail` or `:other`, with optional `remarks:` and `props:`.
+
+`:id` is the name the item's UUID is derived from. A malformed item, or a
+finding with any other reason, raises `ArgumentError` rather than produce a
+document that claims something it should not.
+
+The test suite validates every document it builds against NIST's official
+schema, vendored with its licence in `test/support/oscal/1.2.3/`.
