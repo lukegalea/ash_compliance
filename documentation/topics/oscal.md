@@ -160,5 +160,20 @@ process engine) goes in as plain maps:
 finding with any other reason, raises `ArgumentError` rather than produce a
 document that claims something it should not.
 
-The test suite validates every document it builds against NIST's official
-schema, vendored with its licence in `test/support/oscal/1.2.3/`.
+`AshCompliance.Oscal.AssessmentResults.validate/1` checks a document against
+NIST's official schema, which ships with the package, licence and all, in
+`priv/oscal/1.2.3/`. Validate the document you actually publish: `build/2`
+checks the shape of your `extra_observations` and `extra_findings`, not every
+rule OSCAL puts on their values (a property name must be a token, a time must
+be a date-time), and the schema does.
+
+```elixir
+doc = AshCompliance.Oscal.AssessmentResults.build(sections, meta)
+:ok = AshCompliance.Oscal.AssessmentResults.validate(doc)
+```
+
+It returns `:ok` or `{:error, errors}`, JSV's normalized error map. It needs
+the optional `jsv` dependency, so add `{:jsv, "~> 0.26"}` to your deps (a
+test-only dependency is enough to validate in your suite); without it,
+`validate/1` raises saying so. The package's own suite validates every
+document it builds with it.

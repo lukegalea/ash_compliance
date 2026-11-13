@@ -3,9 +3,9 @@
 
 defmodule AshCompliance.OscalAssessmentResultsTest do
   @moduledoc """
-  `AshCompliance.Oscal.AssessmentResults.build/2`: every document it builds is validated
-  against NIST's official OSCAL 1.2.3 assessment-results schema, vendored with its
-  licence in `test/support/oscal/1.2.3/`. The document never says `satisfied`, its
+  `AshCompliance.Oscal.AssessmentResults.build/2`: every document it builds passes
+  `validate/1`, against NIST's official OSCAL 1.2.3 assessment-results schema, shipped
+  with its licence in `priv/oscal/1.2.3/`. The document never says `satisfied`, its
   identifiers are version 5 UUIDs derived from what they name, and its properties are in
   the namespace the caller chooses.
   """
@@ -20,7 +20,7 @@ defmodule AshCompliance.OscalAssessmentResultsTest do
   alias AshCompliance.Resources.{EvidenceArtifact, Finding}
   alias AshCompliance.TestRepo
 
-  @schema_path "test/support/oscal/1.2.3/oscal_assessment-results_schema.json"
+  @schema_path "priv/oscal/1.2.3/oscal_assessment-results_schema.json"
   @schema_sha256 "4034e2032332dbf597e59e0646ec16c2c31df992962490371e91f47b219ff42c"
   @now ~U[2026-11-10 12:00:00.000000Z]
   @from ~U[2026-04-24 12:00:00.000000Z]
@@ -124,14 +124,13 @@ defmodule AshCompliance.OscalAssessmentResultsTest do
       assert @schema_path |> File.read!() |> sha256() == @schema_sha256
     end
 
-    test "the validator refuses what the schema refuses", %{org: org} do
+    test "validate/1 refuses what the schema refuses", %{org: org} do
       doc = AssessmentResults.build(busy_sections!(org), meta(org))
-      root = schema()
-      assert {:ok, _} = JSV.validate(doc, root)
+      assert :ok = AssessmentResults.validate(doc)
 
       # A version 7 UUID, as the database would issue: OSCAL requires 4 or 5.
       bad_uuid = put_in(doc, ["assessment-results", "uuid"], Ash.UUIDv7.generate())
-      assert {:error, _} = JSV.validate(bad_uuid, root)
+      assert {:error, %{valid: false}} = AssessmentResults.validate(bad_uuid)
 
       # A control id that is not a token.
       [result] = doc["assessment-results"]["results"]
@@ -143,14 +142,28 @@ defmodule AshCompliance.OscalAssessmentResultsTest do
           ])
         ])
 
-      assert {:error, _} = JSV.validate(bad_control, root)
+      assert {:error, %{valid: false}} = AssessmentResults.validate(bad_control)
+    end
+
+    # build/2 checks an extra observation's shape, not every OSCAL rule its values must
+    # meet: validate/1 is what catches the rest before an auditor does.
+    test "validate/1 refuses a host's malformed extra observation", %{org: org} do
+      sections = busy_sections!(org)
+      [observation] = sections.extra_observations
+
+      # A property name must be an OSCAL token: no spaces.
+      malformed = %{observation | props: %{"check status" => "intact"}}
+      doc = AssessmentResults.build(%{sections | extra_observations: [malformed]}, meta(org))
+
+      assert {:error, %{valid: false, details: details}} = AssessmentResults.validate(doc)
+      assert inspect(details) =~ "observations"
     end
   end
 
   describe "build/2" do
     test "builds valid OSCAL 1.2.3 for a busy period and for an empty one", %{org: org} do
       busy = AssessmentResults.build(busy_sections!(org), meta(org))
-      assert :ok = validate(busy)
+      assert :ok = AssessmentResults.validate(busy)
 
       empty_org = Ecto.UUID.generate()
 
@@ -160,7 +173,7 @@ defmodule AshCompliance.OscalAssessmentResultsTest do
           generated_at: @now
         )
 
-      assert :ok = validate(AssessmentResults.build(empty, meta(empty_org)))
+      assert :ok = AssessmentResults.validate(AssessmentResults.build(empty, meta(empty_org)))
       assert busy["assessment-results"]["metadata"]["oscal-version"] == "1.2.3"
     end
 
@@ -240,7 +253,7 @@ defmodule AshCompliance.OscalAssessmentResultsTest do
     test "puts every property in the namespace given", %{org: org} do
       ns = "urn:example:audit"
       doc = AssessmentResults.build(busy_sections!(org), meta(org, %{namespace: ns}))
-      assert :ok = validate(doc)
+      assert :ok = AssessmentResults.validate(doc)
 
       namespaces = doc |> collect_props() |> Enum.map(& &1["ns"]) |> Enum.uniq()
       assert namespaces == [ns]
@@ -315,32 +328,6 @@ defmodule AshCompliance.OscalAssessmentResultsTest do
 
   defp collect_props(list) when is_list(list), do: Enum.flat_map(list, &collect_props/1)
   defp collect_props(_), do: []
-
-  defp validate(doc) do
-    case JSV.validate(doc, schema()) do
-      {:ok, _} -> :ok
-      {:error, error} -> {:error, JSV.normalize_error(error)}
-    end
-  end
-
-  # The official schema, read unchanged. Each definition repeats its own location as its
-  # `$id`, which JSV refuses as an identifier: such an `$id` is dropped, which changes
-  # nothing it resolves to, and any other `$id` fails the test.
-  defp schema do
-    raw = @schema_path |> File.read!() |> Jason.decode!()
-
-    definitions =
-      Map.new(raw["definitions"], fn
-        {name, %{"$id" => id} = definition} ->
-          if id != "#/definitions/" <> name, do: flunk("unexpected $id #{id} on #{name}")
-          {name, Map.delete(definition, "$id")}
-
-        other ->
-          other
-      end)
-
-    raw |> Map.put("definitions", definitions) |> JSV.build!(formats: true)
-  end
 
   defp sha256(binary), do: :sha256 |> :crypto.hash(binary) |> Base.encode16(case: :lower)
 end

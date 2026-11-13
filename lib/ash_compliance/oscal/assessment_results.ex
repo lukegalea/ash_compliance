@@ -16,8 +16,9 @@ defmodule AshCompliance.Oscal.AssessmentResults do
       unknown, for every compliance finding open in the period that is not compliant,
       and one for each of the host's `extra_findings`.
 
-  The package's test suite validates every document it builds against NIST's official
-  assessment-results schema.
+  `validate/1` checks a document against NIST's official assessment-results schema,
+  which ships with the package in `priv/oscal/`. It needs the optional `:jsv`
+  dependency. The package's test suite validates every document it builds with it.
 
   ## Never "satisfied"
 
@@ -55,6 +56,35 @@ defmodule AshCompliance.Oscal.AssessmentResults do
   @token ~r/^(\p{L}|_)(\p{L}|\p{N}|[.\-_])*$/u
   @methods ~w(EXAMINE INTERVIEW TEST UNKNOWN)
   @reasons ~w(fail other)
+
+  # NIST's schema, read at compile time. Each definition repeats its own location as its
+  # `$id` (`"#/definitions/<name>"`), which JSV refuses as an identifier: such an `$id` is
+  # dropped, which changes nothing it resolves to, and any other `$id` fails the build.
+  @schema_path Path.expand(
+                 "../../../priv/oscal/#{@oscal_version}/oscal_assessment-results_schema.json",
+                 __DIR__
+               )
+  @external_resource @schema_path
+  @schema @schema_path
+          |> File.read!()
+          |> Jason.decode!()
+          |> Map.update!("definitions", fn definitions ->
+            Map.new(definitions, fn
+              {name, %{"$id" => id} = definition} ->
+                if id != "#/definitions/" <> name do
+                  raise CompileError,
+                    description: "unexpected $id #{id} on #{name} in #{@schema_path}"
+                end
+
+                {name, Map.delete(definition, "$id")}
+
+              other ->
+                other
+            end)
+          end)
+
+  # JSV is an optional dependency: validate/1 checks for it at run time.
+  @compile {:no_warn_undefined, JSV}
 
   @typedoc """
   A host observation (`extra_observations:`), a plain map with atom keys:
@@ -100,6 +130,46 @@ defmodule AshCompliance.Oscal.AssessmentResults do
   @doc "The OSCAL version the document declares and is validated against."
   @spec oscal_version() :: String.t()
   def oscal_version, do: @oscal_version
+
+  @doc """
+  Validates `document` against NIST's OSCAL #{@oscal_version} assessment-results JSON
+  schema, vendored unchanged in the package's `priv/oscal/#{@oscal_version}/`.
+
+  `document` is what `build/2` returns, with any changes the host makes before it
+  publishes it. Returns `:ok`, or `{:error, errors}` where `errors` is JSV's normalized
+  error map (`JSV.normalize_error/1`): `%{valid: false, details: [...]}`, each detail
+  naming the instance location and the schema rule it broke.
+
+  Needs the optional `:jsv` dependency (`{:jsv, "~> 0.26"}` in the host's deps), and
+  raises a `RuntimeError` saying so without it. The schema is built once, on the first
+  call, and kept in `:persistent_term`.
+  """
+  @spec validate(map()) :: :ok | {:error, map()}
+  def validate(document) do
+    case JSV.validate(document, schema_root()) do
+      {:ok, _} -> :ok
+      {:error, error} -> {:error, JSV.normalize_error(error)}
+    end
+  end
+
+  defp schema_root do
+    key = {__MODULE__, :schema_root}
+
+    case :persistent_term.get(key, nil) do
+      nil ->
+        unless Code.ensure_loaded?(JSV) do
+          raise "AshCompliance.Oscal.AssessmentResults.validate/1 needs the optional :jsv " <>
+                  ~s(dependency: add {:jsv, "~> 0.26"} to your mix.exs deps.)
+        end
+
+        root = JSV.build!(@schema, formats: true)
+        :persistent_term.put(key, root)
+        root
+
+      root ->
+        root
+    end
+  end
 
   @doc "The default namespace of the document's own properties."
   @spec default_namespace() :: String.t()
