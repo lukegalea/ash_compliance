@@ -12,8 +12,9 @@ defmodule AshCompliance.Oscal do
   a changed document opens a new version and withdraws the predecessors
   it supersedes (see `import_catalog/2`).
 
-  v1 scope: **catalogs and profiles only** (component definitions and
-  assessment plans are out).
+  Scope: **catalogs and profiles** in and out. Assessment results go out
+  only, through `AshCompliance.Oscal.AssessmentResults`. Component
+  definitions and assessment plans are out.
 
   JSON shapes (a tolerant subset of OSCAL JSON):
 
