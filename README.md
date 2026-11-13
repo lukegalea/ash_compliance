@@ -159,6 +159,10 @@ checkpointing and dead-lettering handled by the projector engine.
 * **OSCAL interop** — catalog and profile import/export via
   `AshCompliance.Oscal` and the `mix ash_compliance.import_oscal` /
   `mix ash_compliance.export_oscal` tasks.
+* **Rule set diffs** — `AshCompliance.RuleSet.Diff.diff/2` says what changed
+  between two `RuleSetRevision`s, over the bundles they pin rather than the
+  JSON text: the layer and combining algorithm, each rule by id and each fact
+  by name, as plain change maps a host can render or store.
 * **Record-level status** — `AshCompliance.status_for/2` evaluates the
   active bundle against one record, read-only, and returns per-rule verdicts
   (`AshCompliance.Status`, `AshCompliance.Status.Verdict`). The host supplies
