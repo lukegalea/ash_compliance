@@ -60,6 +60,10 @@ Requires Elixir 1.20 or later.
 
 ### Changed:
 
+- `ApprovalAttempt :record` no longer accepts `outcome`, `reason` or `decision_hash`: the row asks the separation-of-duties decision itself, so a caller cannot record a permit the decision would not give. `Processes.Approval.record/4` is now `record/3` (no verdict argument). **Host step:** drop the verdict argument at each `Approval.record` call.
+
+- `ApprovalAttempt` and `PolicyOverride` carry `Ash.Policy.Authorizer`: reads are open; every create, update or destroy from an actor is forbidden. **Host step:** write them through `Processes.Approval`/`Processes.Gate`, or from trusted code with `authorize?: false` (seeds, fixtures, and the host action that grants a waiver under its own policies).
+
 - **Bundles and rule sets compiled under a declared scheme can be stored.**
   `PolicyBundle :compile` takes optional `scheme`, `source` and `context`
   arguments, passed to `AshCompliance.Compiler.compile/1`, and records the

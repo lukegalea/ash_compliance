@@ -19,9 +19,15 @@ defmodule AshCompliance.Processes.Approval do
       approval.
 
   Attempts are written outside any caller transaction when you call `decide/3`
-  directly. Code that runs inside an Ash action should use `verdict/1` and
-  `record/4`, so a refusal can be written after the action's transaction has
-  rolled back.
+  directly. Code that runs inside an Ash action should use
+  `AshCompliance.Processes.Gate`, or `verdict/1` and `record/3`, so a refusal
+  can be written after the action's transaction has rolled back.
+
+  The attempt row asks the decision itself when it is written, so the outcome
+  on record is always the decision's, never the caller's. Attempts are written
+  with `authorize?: false`: the resource refuses every write from an actor (see
+  `AshCompliance.Resources.ApprovalAttempt`), and this module is the trusted
+  path to it.
   """
 
   alias AshCompliance.Domain
@@ -43,13 +49,18 @@ defmodule AshCompliance.Processes.Approval do
   @spec decide(String.t(), attrs(), keyword()) ::
           {:ok, struct()} | {:error, {:refused, String.t(), struct() | nil}} | {:error, term()}
   def decide(organization_id, attrs, opts \\ []) do
-    verdict = verdict(attrs)
+    case record(organization_id, attrs, opts) do
+      {:ok, %{outcome: :permitted} = attempt} ->
+        {:ok, attempt}
 
-    case {verdict.outcome, record(organization_id, attrs, verdict, opts)} do
-      {:permit, {:ok, attempt}} -> {:ok, attempt}
-      {:permit, {:error, error}} -> {:error, {:unrecorded, error}}
-      {:refuse, {:ok, attempt}} -> {:error, {:refused, verdict.reason, attempt}}
-      {:refuse, {:error, _}} -> {:error, {:refused, verdict.reason, nil}}
+      {:ok, attempt} ->
+        {:error, {:refused, attempt.reason, attempt}}
+
+      {:error, error} ->
+        case verdict(attrs) do
+          %{outcome: :permit} -> {:error, {:unrecorded, error}}
+          %{reason: reason} -> {:error, {:refused, reason, nil}}
+        end
     end
   end
 
@@ -63,12 +74,16 @@ defmodule AshCompliance.Processes.Approval do
     )
   end
 
-  @doc "Writes the attempt row for a verdict."
-  @spec record(String.t(), attrs(), SeparationOfDuties.verdict(), keyword()) ::
-          {:ok, struct()} | {:error, term()}
-  def record(organization_id, attrs, verdict, opts \\ []) do
+  @doc """
+  Writes the attempt row. The row asks the decision with the same inputs
+  `verdict/1` uses and records its answer.
+  """
+  @spec record(String.t(), attrs(), keyword()) :: {:ok, struct()} | {:error, term()}
+  def record(organization_id, attrs, opts \\ []) do
     delegators = Map.get(attrs, :delegators)
 
+    # Trusted machinery: ApprovalAttempt refuses every write from an actor,
+    # because the approver it records is whoever the caller names.
     Domain.record_approval_attempt(
       %{
         organization_id: organization_id,
@@ -77,13 +92,10 @@ defmodule AshCompliance.Processes.Approval do
         requester_id: text(Map.get(attrs, :requester_id)),
         approver_id: text(Map.get(attrs, :approver_id)),
         delegation_chain: if(chain?(delegators), do: delegators, else: []),
-        delegation_recorded?: chain?(delegators),
-        outcome: if(verdict.outcome == :permit, do: :permitted, else: :refused),
-        reason: verdict.reason,
-        decision_hash: verdict.decision_hash
+        delegation_recorded?: chain?(delegators)
       },
       actor: opts[:actor],
-      authorize?: Keyword.get(opts, :authorize?, false)
+      authorize?: false
     )
   end
 

@@ -53,7 +53,7 @@ defmodule AshCompliance.Processes.Gate do
             changeset
 
           :refuse ->
-            _ = Approval.record(organization_id, attrs, verdict)
+            _ = Approval.record(organization_id, attrs)
 
             Ash.Changeset.add_error(changeset,
               message: "separation of duties: refused (#{verdict.reason})"
@@ -64,9 +64,10 @@ defmodule AshCompliance.Processes.Gate do
 
   defp record_permit(changeset, record) do
     case changeset.context[@context_key] do
-      %{verdict: %{outcome: :permit} = verdict, organization_id: org, attrs: attrs} ->
-        case Approval.record(org, attrs, verdict) do
-          {:ok, _attempt} -> {:ok, record}
+      %{verdict: %{outcome: :permit}, organization_id: org, attrs: attrs} ->
+        case Approval.record(org, attrs) do
+          {:ok, %{outcome: :permitted}} -> {:ok, record}
+          {:ok, attempt} -> {:error, "separation of duties: refused (#{attempt.reason})"}
           {:error, error} -> {:error, error}
         end
 

@@ -19,9 +19,10 @@ defmodule AshCompliance.Domain do
 
   Callers pass `actor:`, `tenant:` and `authorize?:` as options on each call.
   The package attaches no policies of its own (they are the host's to
-  define), so by default these calls run authorized-but-unrestricted; see the
-  README for the policy story and for the `authorize?: false` conventions this
-  package uses in its trusted internal machinery.
+  define), so by default these calls run authorized-but-unrestricted, except
+  on `ApprovalAttempt` and `PolicyOverride`, which refuse every write from an
+  actor; see the README for the policy story and for the `authorize?: false`
+  conventions this package uses in its trusted internal machinery.
   """
 
   use Ash.Domain,

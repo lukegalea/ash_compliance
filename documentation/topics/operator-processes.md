@@ -99,6 +99,12 @@ refused.
 
 An approval that cannot be recorded is not an approval.
 
+The attempt row asks the decision itself when it is written: `outcome`,
+`reason` and `decision_hash` are not inputs to `ApprovalAttempt :record`, so a
+row cannot claim a permit the decision did not give. No actor may write an
+attempt (the resource's policies refuse it); `Approval.record/3` and the
+`Gate` write them as trusted machinery.
+
 ## Completion writes evidence
 
 ```elixir

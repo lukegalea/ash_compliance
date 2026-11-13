@@ -12,9 +12,24 @@ defmodule AshCompliance.Resources.ApprovalAttempt do
 
   Create and read only. An attempt is never edited or removed; a hardening
   trigger for the table is described in the ownership and processes topic.
+
+  `:record` takes the people and the delegation chain and asks the decision
+  itself (`Changes.Decide`): `outcome`, `reason` and `decision_hash` are not
+  inputs, so a row cannot claim a permit the decision did not give.
+
+  ## Authorization
+
+  Reads are open; the host decides who sees them. No actor may write an
+  attempt: the approver on a row is whoever the caller names, so a write from a
+  request would let anyone put an approval on record in someone else's name.
+  Attempts are written by `AshCompliance.Processes.Approval` and
+  `AshCompliance.Processes.Gate`, which run `authorize?: false` as trusted
+  machinery.
   """
 
-  use AshCompliance.Resource, table: "approval_attempts"
+  use AshCompliance.Resource,
+    table: "approval_attempts",
+    authorizers: [Ash.Policy.Authorizer]
 
   attributes do
     uuid_primary_key(:id)
@@ -84,11 +99,10 @@ defmodule AshCompliance.Resources.ApprovalAttempt do
         :requester_id,
         :approver_id,
         :delegation_chain,
-        :delegation_recorded?,
-        :outcome,
-        :reason,
-        :decision_hash
+        :delegation_recorded?
       ])
+
+      change({AshCompliance.Resources.ApprovalAttempt.Changes.Decide, []})
     end
 
     read :for_subject do
@@ -107,6 +121,16 @@ defmodule AshCompliance.Resources.ApprovalAttempt do
     read :for_organization do
       argument(:organization_id, :uuid, allow_nil?: false)
       filter(expr(organization_id == ^arg(:organization_id)))
+    end
+  end
+
+  policies do
+    policy action_type(:read) do
+      authorize_if(always())
+    end
+
+    policy action_type(:create) do
+      authorize_if(never())
     end
   end
 end

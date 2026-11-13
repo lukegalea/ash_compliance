@@ -11,6 +11,11 @@ defmodule AshCompliance.Resource do
   #     config :ash_compliance, repo: MyApp.Repo, table_prefix: "ash_compliance_"
   #
   # Same pattern as AshEvents.Projections.InternalResource.
+  #
+  # `authorizers:` is passed through. Most resources take none (the host owns
+  # authorization); the two whose rows stand as an approval on record,
+  # `ApprovalAttempt` and `PolicyOverride`, take the policy authorizer and
+  # refuse every write from an actor.
 
   defmacro __using__(opts) do
     table_suffix = Keyword.fetch!(opts, :table)
@@ -23,7 +28,8 @@ defmodule AshCompliance.Resource do
 
       use Ash.Resource,
         domain: AshCompliance.Domain,
-        data_layer: AshPostgres.DataLayer
+        data_layer: AshPostgres.DataLayer,
+        authorizers: unquote(Keyword.get(opts, :authorizers, []))
 
       postgres do
         table(@table)

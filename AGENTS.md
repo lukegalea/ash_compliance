@@ -36,7 +36,9 @@ open it, these rules from it still apply:
   (append-only, "why") are different artifacts. No code path rewrites either.
 - Missing evidence is never compliance. `unknown` never collapses to
   `compliant`.
-- The package ships no policy blocks. The host owns authorization.
+- The package ships no policy blocks, except on `ApprovalAttempt` and
+  `PolicyOverride`, which refuse every write from an actor. The host owns
+  authorization.
   `authorize?: false` appears only in trusted machinery, with a justification
   comment at each site.
 - Tenancy is an explicit `organization_id` attribute, not Ash multitenancy.

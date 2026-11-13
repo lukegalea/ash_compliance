@@ -61,9 +61,20 @@ defmodule AshCompliance.Resources.PolicyOverride do
   argument — which is how the compiler keeps its deterministic compile
   clock: the pinned `now` becomes the read's `as_of`, evaluated by the
   database against the enforced periods.
+
+  ## Authorization
+
+  Reads are open; the host decides who sees them. No actor may create or
+  destroy an override through the resource: an override silences a rule, and
+  its approver and requester are whatever the caller names. A host grants one
+  from its own action, which carries the host's policies and its own
+  approval, and calls `create_policy_override` with `authorize?: false` there.
+  The package's own writes (`Changes.BoundWindow`) already run that way.
   """
 
-  use AshCompliance.Resource, table: "policy_overrides"
+  use AshCompliance.Resource,
+    table: "policy_overrides",
+    authorizers: [Ash.Policy.Authorizer]
 
   temporal do
     strategy(:context)
@@ -197,6 +208,16 @@ defmodule AshCompliance.Resources.PolicyOverride do
       # period contains it (index-backed containment). This is what keeps
       # the compiler's deterministic compile clock working unchanged.
       prepare({AshCompliance.Resources.PolicyOverride.Preparations.AsOfNow, []})
+    end
+  end
+
+  policies do
+    policy action_type(:read) do
+      authorize_if(always())
+    end
+
+    policy action_type([:create, :update, :destroy]) do
+      authorize_if(never())
     end
   end
 end
