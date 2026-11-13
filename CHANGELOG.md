@@ -18,6 +18,20 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
+- The evidence archive. `use AshCompliance.Resources, {:evidence_archive, table:, repo:}`
+  builds it on the host's own resource, so the host keeps its domain, policies and table
+  name (`:guard_function` names the guard trigger's function). It has the hot table's
+  columns plus `archived_at`, no write action, and a trigger that refuses every update and
+  any delete younger than 400 days. Name it with `config :ash_compliance,
+  evidence_archive: ...`. `AshCompliance.Ownership.Retention.archive/1` moves artifacts
+  older than `:hot_days` (at least 90) by a copy verified column by column and by hash
+  before the hot rows are deleted, and keeps the newest artifact of each organization,
+  control and collector hot. `purge/1` deletes archived artifacts only past a given
+  `:purge_after_days` (at least 400). Both record each step in an optional `:archive_run`
+  ledger. `Evidence.for_control/3` reads the hot table and the archive together, and the
+  freshness sweep reads through it, so archiving never changes what a sweep finds.
+  Requires a host migration for the archive table (`mix ash.codegen`).
+
 - `AshCompliance.RuleSet.Diff`: `diff(old, new)` compares two rule set revisions over the bundles they pin, not the JSON text. It reports the layer and combining algorithm, each rule by id property by property, and each fact by name, as plain maps (`aspect`, `kind`, `subject`, `option`, `from`, `to`). `aspects/0` lists what it compares with English labels. A bundle that does not decode is `{:error, :unreadable_bundle}`, not an empty rule set.
 
 - `Processes.Completion.complete/4` option `:approvals_organization_id`: judge the permitted approval in one organization while filing the evidence in another.

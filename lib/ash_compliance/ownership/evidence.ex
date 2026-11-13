@@ -24,6 +24,8 @@ defmodule AshCompliance.Ownership.Evidence do
   """
 
   alias AshCompliance.Domain
+  alias AshCompliance.Ownership.Retention
+  alias AshCompliance.Resources.EvidenceArtifact
 
   # Clock skew tolerated before a collection time counts as future-dated.
   @skew_seconds 300
@@ -101,6 +103,61 @@ defmodule AshCompliance.Ownership.Evidence do
       {:error, reason} -> {:error, {:producer_failed, reason}}
     end
   end
+
+  @doc """
+  Every artifact recorded for `control_id` in `organization_id`, from the hot table and
+  the evidence archive together, oldest first.
+
+  An artifact moved by `AshCompliance.Ownership.Retention` is read from the archive, so
+  moving one never changes what this returns. During a move an artifact can briefly be in
+  both tables; it is returned once. Without an archive (no `:evidence_archive` setting
+  and no `:archive` option) only the hot table is read.
+
+  Options: `:archive` (the archive resource; default the `:evidence_archive` setting,
+  `nil` for none), `:actor`, `:authorize?` (default `false`; evidence reads are trusted
+  machinery, like the sweep).
+  """
+  @spec for_control(String.t(), String.t(), keyword()) :: {:ok, [struct()]} | {:error, term()}
+  def for_control(organization_id, control_id, opts \\ []) do
+    archive = Keyword.get_lazy(opts, :archive, &Retention.configured_archive/0)
+    ash_opts = [actor: opts[:actor], authorize?: Keyword.get(opts, :authorize?, false)]
+
+    with {:ok, hot} <- Domain.evidence_for_control(organization_id, control_id, ash_opts),
+         {:ok, archived} <- archived(archive, organization_id, control_id, ash_opts) do
+      {:ok,
+       (hot ++ archived)
+       |> Enum.uniq_by(& &1.id)
+       |> Enum.sort(&collected_first?/2)}
+    end
+  end
+
+  defp collected_first?(a, b) do
+    case DateTime.compare(a.collected_at, b.collected_at) do
+      :lt -> true
+      :gt -> false
+      :eq -> a.id <= b.id
+    end
+  end
+
+  defp archived(nil, _organization_id, _control_id, _ash_opts), do: {:ok, []}
+
+  defp archived(archive, organization_id, control_id, ash_opts) do
+    archive
+    |> Ash.Query.for_read(
+      :for_control,
+      %{organization_id: organization_id, control_id: control_id},
+      ash_opts
+    )
+    |> Ash.read()
+  end
+
+  @doc """
+  Where an artifact read by `for_control/3` lives: `:hot` for the package's own
+  `EvidenceArtifact`, `:archive` for a row of the host's evidence archive.
+  """
+  @spec location(struct()) :: :hot | :archive
+  def location(%EvidenceArtifact{}), do: :hot
+  def location(_archived), do: :archive
 
   @doc """
   Re-checks an artifact's stored bytes against its hash.

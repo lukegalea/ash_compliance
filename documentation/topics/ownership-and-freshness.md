@@ -107,6 +107,59 @@ destroy action; a correction is a new artifact. `collect/4` runs a producer
 function and records what it returns. A producer that errors, raises or
 returns nothing leaves no artifact, so the control reads as missing or stale.
 
+## The evidence archive and retention
+
+Evidence piles up: a daily producer writes 365 artifacts a year for each
+criterion it evidences. The package moves old artifacts out of the hot table
+into an archive the host builds on its own resource, so the host's domain,
+policies and table name apply:
+
+```elixir
+defmodule MyApp.Compliance.ArchivedEvidence do
+  use Ash.Resource,
+    domain: MyApp.Compliance,
+    data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer]
+
+  use AshCompliance.Resources,
+      {:evidence_archive, table: "evidence_artifact_archive", repo: MyApp.Repo}
+
+  policies do
+    # who may read archived evidence
+  end
+end
+```
+
+```elixir
+config :ash_compliance, evidence_archive: MyApp.Compliance.ArchivedEvidence
+```
+
+Generate the table with `mix ash.codegen`. The archive has the hot table's
+columns plus `archived_at`, no create, update or destroy action, and a guard
+trigger that refuses every update and any delete of an artifact collected less
+than 400 days ago. `:guard_function` names the trigger's function, for a host
+that already has one.
+
+`AshCompliance.Ownership.Retention.archive/1` moves one batch of artifacts
+older than `:hot_days` (default and floor 90). In one transaction it copies
+them, checks the copy (the same count, every column equal, the same SHA-256
+over the hashes, every stored `content` hashing to its `hash`) and only then
+deletes the hot rows. A failed check rolls everything back and returns
+`{:failed, run}` with the reason. **The newest artifact of each organization,
+control and collector stays hot whatever its age**, so an annual control's
+single artifact is never moved for being a hundred days old.
+
+`purge/1` deletes archived artifacts older than `:purge_after_days`, which is
+`nil` (never) unless given and refused under 400. Call both from your own
+scheduled job, with your own configuration and actor; pass `:archive_run` (a
+resource with a `:record` create action, such as an `ash_events_chain` run
+ledger) to record each step.
+
+Every read of evidence takes the hot table and the archive together:
+`AshCompliance.Ownership.Evidence.for_control/3` returns both, each artifact
+once and oldest first, and the freshness sweep reads through it. Moving an
+artifact never changes what a sweep finds.
+
 ## Freshness
 
 `AshCompliance.Ownership.Freshness` is a pure evaluator. For each in-scope

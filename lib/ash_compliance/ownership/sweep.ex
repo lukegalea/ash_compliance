@@ -37,14 +37,15 @@ defmodule AshCompliance.Ownership.Sweep do
   """
 
   alias AshCompliance.Domain
-  alias AshCompliance.Ownership.{ControlFile, Criteria, Freshness}
+  alias AshCompliance.Ownership.{ControlFile, Criteria, Evidence, Freshness}
 
   @doc """
   Runs a sweep for `organization_id`.
 
   Options: `:controls_file` (required), `:categories` (default `[:security]`),
   `:now`, `:actor`, `:authorize?` (default `false`; sweeps are trusted
-  machinery).
+  machinery), `:archive` (the evidence archive read beside the hot table;
+  default the `:evidence_archive` setting).
 
   Returns `{:ok, results}` with one result per in-scope criterion.
   """
@@ -55,7 +56,7 @@ defmodule AshCompliance.Ownership.Sweep do
     now = Keyword.get_lazy(opts, :now, &DateTime.utc_now/0)
     ash_opts = [actor: opts[:actor], authorize?: Keyword.get(opts, :authorize?, false)]
 
-    with {:ok, artifacts} <- load_artifacts(organization_id, categories, ash_opts),
+    with {:ok, artifacts} <- load_artifacts(organization_id, categories, opts, ash_opts),
          {:ok, overrides} <-
            Domain.valid_policy_overrides(
              organization_id,
@@ -75,11 +76,15 @@ defmodule AshCompliance.Ownership.Sweep do
     end
   end
 
-  defp load_artifacts(organization_id, categories, ash_opts) do
+  # Hot and archived together (`Evidence.for_control/3`): moving an artifact to the
+  # archive never changes what a sweep finds.
+  defp load_artifacts(organization_id, categories, opts, ash_opts) do
+    read_opts = ash_opts ++ Keyword.take(opts, [:archive])
+
     categories
     |> Criteria.in_categories()
     |> Enum.reduce_while({:ok, %{}}, fn %{id: id}, {:ok, acc} ->
-      case Domain.evidence_for_control(organization_id, id, ash_opts) do
+      case Evidence.for_control(organization_id, id, read_opts) do
         {:ok, artifacts} -> {:cont, {:ok, Map.put(acc, id, artifacts)}}
         {:error, error} -> {:halt, {:error, error}}
       end

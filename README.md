@@ -155,7 +155,10 @@ checkpointing and dead-lettering handled by the projector engine.
   `[organization_id, control_id, subject_type, subject_id]` grain.
 * **The auditor's truth** — `ComplianceEvaluation` (append-only) and
   `EvidenceArtifact` (immutable, hash + media type + collector + method +
-  chain of custody + retention class).
+  chain of custody + retention class), and an evidence archive the host builds
+  with `use AshCompliance.Resources, {:evidence_archive, opts}`: old artifacts
+  move there by a verified copy (`AshCompliance.Ownership.Retention`), and
+  every read of evidence takes the hot table and the archive together.
 * **OSCAL interop** — catalog and profile import/export via
   `AshCompliance.Oscal` and the `mix ash_compliance.import_oscal` /
   `mix ash_compliance.export_oscal` tasks.
@@ -289,7 +292,7 @@ PGPORT=5435 mix test          # config/test.exs documents DB_HOST/DB_USER/DB_PAS
 - [OSCAL](documentation/topics/oscal.md) — catalog/profile import and export.
 - [Ownership and freshness](documentation/topics/ownership-and-freshness.md) — the
   criteria catalogue, the control-file schema, `mix ash_compliance.controls.check`,
-  the evidence writer and the freshness worker.
+  the evidence writer, the freshness worker, and the evidence archive and retention.
 - [The boundary declaration](documentation/topics/boundary.md) — production
   environments and resources, the separate controls that read them, and the JSON generated
   and gated by `mix ash.codegen`.

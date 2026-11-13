@@ -20,5 +20,7 @@ defmodule AshCompliance.Test.Domain do
     resource(AshCompliance.Resources.Finding)
     resource(AshCompliance.Resources.ComplianceEvaluation)
     resource(AshCompliance.Resources.EvidenceArtifact)
+    resource(AshCompliance.Test.ArchivedEvidence)
+    resource(AshCompliance.Test.ArchiveRun)
   end
 end
