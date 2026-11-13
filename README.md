@@ -217,9 +217,14 @@ projected through the strangler ledger.
 
 ### Policies and authorization (host-owned)
 
-The package ships **no policy blocks**: which actor may waive which control
-is a decision for the host, made by attaching `Ash.Policy.Authorizer` to the
-resources it hosts. The seam is the `actor:`/`authorize?:` options every
+The package ships **no policy blocks** on its resources but two: which actor
+may waive which control is a decision for the host, made by attaching
+`Ash.Policy.Authorizer` to the resources it hosts. The two exceptions are
+`ApprovalAttempt` and `PolicyOverride`, whose rows stand as an approval on
+record and name an approver the caller supplies: they read open and refuse
+every write from an actor. A host writes them from its own authorized action
+with `authorize?: false`, or through `Processes.Approval` and
+`Processes.Gate`, which do. The seam is the `actor:`/`authorize?:` options every
 domain interface, `AshCompliance.Oscal` function and
 `AshCompliance.Testing.drain_sync/3` call accepts. Inside the package,
 `authorize?: false` appears only in **trusted machinery** — the compiler
