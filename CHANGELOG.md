@@ -28,9 +28,12 @@ Requires Elixir 1.20 or later.
   `AshCompliance.Oscal.AssessmentResults.build(sections, meta)` turns them into an OSCAL
   1.2.3 assessment-results document. It never says `satisfied`: unknown is a
   `not-satisfied` finding with reason `other`. Identifiers are version 5 UUIDs derived
-  from what they name, and properties use `meta.namespace`. The test suite validates
-  every document against NIST's schema, vendored with its CC0 licence under
-  `test/support/oscal/1.2.3/`.
+  from what they name, and properties use `meta.namespace`.
+  `AshCompliance.Oscal.AssessmentResults.validate(document)` returns `:ok` or
+  `{:error, errors}` against NIST's schema, which ships unchanged with its CC0 licence in
+  `priv/oscal/1.2.3/`, so a host can validate the document it builds, its own extra
+  observations and findings included. It needs `jsv`, an optional dependency, and raises
+  saying so without it.
 
 - The evidence archive. `use AshCompliance.Resources, {:evidence_archive, table:, repo:}`
   builds it on the host's own resource, so the host keeps its domain, policies and table

@@ -61,8 +61,8 @@ defmodule AshCompliance.MixProject do
       licenses: ["MIT"],
       maintainers: ["Luke Galea <luke@ideaforge.org>"],
       files:
-        ~w(lib priv/processes priv/decisions documentation CHANGELOG.md LICENSE README.md usage-rules.md
-        mix.exs .formatter.exs),
+        ~w(lib priv/processes priv/decisions priv/oscal documentation CHANGELOG.md LICENSE README.md
+        usage-rules.md mix.exs .formatter.exs),
       links: %{
         "GitHub" => @source_url
       }
@@ -88,6 +88,10 @@ defmodule AshCompliance.MixProject do
       {:postgrex, ">= 0.0.0"},
       # Canonical JSON for content hashes.
       {:jason, "~> 1.2"},
+      # AshCompliance.Oscal.AssessmentResults.validate/1 checks a document against
+      # NIST's OSCAL schema, vendored in priv/oscal/. Optional: a host that never
+      # validates does not need it, and validate/1 raises saying so.
+      {:jsv, "~> 0.26", optional: true},
       # The ruleset editor LiveView. A hard dependency rather than optional,
       # the same way ash_decisions declares its editor: the editor is half of
       # what this package is for, and an optional dependency that the shipped
@@ -108,9 +112,6 @@ defmodule AshCompliance.MixProject do
       # floki because it is what phoenix_live_view 1.x selects against; the
       # same declaration ash_decisions makes for the same reason.
       {:lazy_html, ">= 0.1.0", only: :test},
-      # Validates every assessment-results document the suite builds against NIST's
-      # vendored OSCAL schema (test/support/oscal/).
-      {:jsv, "~> 0.26", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

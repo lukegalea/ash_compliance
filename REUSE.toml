@@ -3,9 +3,9 @@
 
 version = 1
 
-# NIST's OSCAL schema and its licence, vendored unchanged for the test suite.
+# NIST's OSCAL schema and its licence, vendored unchanged and shipped in priv/.
 [[annotations]]
-path = ["test/support/oscal/*/oscal_assessment-results_schema.json", "test/support/oscal/*/LICENSE.md"]
+path = ["priv/oscal/*/oscal_assessment-results_schema.json", "priv/oscal/*/LICENSE.md"]
 precedence = "override"
 SPDX-FileCopyrightText = "National Institute of Standards and Technology (NIST)"
 SPDX-License-Identifier = "CC0-1.0"

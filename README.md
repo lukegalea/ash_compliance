@@ -163,8 +163,10 @@ checkpointing and dead-lettering handled by the projector engine.
   `AshCompliance.Oscal` and the `mix ash_compliance.import_oscal` /
   `mix ash_compliance.export_oscal` tasks, and assessment results for an
   auditor (`AshCompliance.Ownership.Package.sections/4`,
-  `AshCompliance.Oscal.AssessmentResults.build/2`), validated in the test
-  suite against NIST's OSCAL 1.2.3 schema. They never say `satisfied`.
+  `AshCompliance.Oscal.AssessmentResults.build/2`), checked by
+  `AssessmentResults.validate/1` against NIST's OSCAL 1.2.3 schema, which ships
+  in `priv/oscal/` (validation needs the optional `jsv` dependency). They never
+  say `satisfied`.
 * **Rule set diffs** — `AshCompliance.RuleSet.Diff.diff/2` says what changed
   between two `RuleSetRevision`s, over the bundles they pin rather than the
   JSON text: the layer and combining algorithm, each rule by id and each fact
