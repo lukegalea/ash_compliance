@@ -6,7 +6,10 @@ import Config
 config :ash_compliance,
   ecto_repos: [AshCompliance.TestRepo],
   repo: AshCompliance.TestRepo,
-  ash_rules_github_repo: "lukegalea/ash_rules"
+  ash_rules_github_repo: "lukegalea/ash_rules",
+  # The evidence archive the sweep and every evidence read include
+  # (test/support/archived_evidence.ex).
+  evidence_archive: AshCompliance.Test.ArchivedEvidence
 
 config :ash_compliance, AshCompliance.TestRepo,
   username: System.get_env("DB_USER", "postgres"),
