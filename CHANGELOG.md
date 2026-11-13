@@ -18,6 +18,20 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
+- OSCAL assessment results. `AshCompliance.Ownership.Package.sections(org, from, to, opts)`
+  assembles the compliance plane's part of an audit package: the criteria in scope
+  (`categories:`) with the host's control-file row for each (`controls_file:`), the
+  evidence collected in the period from the hot table and the archive, each re-checked
+  against its hash, each criterion's freshness at the end of the period with the waivers
+  in force then, and the findings open in the period. `extra_observations:` and
+  `extra_findings:` carry the host's own as plain maps.
+  `AshCompliance.Oscal.AssessmentResults.build(sections, meta)` turns them into an OSCAL
+  1.2.3 assessment-results document. It never says `satisfied`: unknown is a
+  `not-satisfied` finding with reason `other`. Identifiers are version 5 UUIDs derived
+  from what they name, and properties use `meta.namespace`. The test suite validates
+  every document against NIST's schema, vendored with its CC0 licence under
+  `test/support/oscal/1.2.3/`.
+
 - The evidence archive. `use AshCompliance.Resources, {:evidence_archive, table:, repo:}`
   builds it on the host's own resource, so the host keeps its domain, policies and table
   name (`:guard_function` names the guard trigger's function). It has the hot table's

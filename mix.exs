@@ -108,6 +108,9 @@ defmodule AshCompliance.MixProject do
       # floki because it is what phoenix_live_view 1.x selects against; the
       # same declaration ash_decisions makes for the same reason.
       {:lazy_html, ">= 0.1.0", only: :test},
+      # Validates every assessment-results document the suite builds against NIST's
+      # vendored OSCAL schema (test/support/oscal/).
+      {:jsv, "~> 0.26", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -168,7 +171,11 @@ defmodule AshCompliance.MixProject do
           AshCompliance.Resources.AccessReviewDecision,
           AshCompliance.Workers.ProcessOverdue
         ],
-        Interop: [AshCompliance.Oscal, AshCompliance.Workers.NotifyProjectors],
+        Interop: [
+          AshCompliance.Oscal,
+          AshCompliance.Oscal.AssessmentResults,
+          AshCompliance.Workers.NotifyProjectors
+        ],
         Internals: ~r/.*/
       ]
     ]

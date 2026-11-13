@@ -256,6 +256,17 @@ not `Domain.evidence_for_control/3`, whenever the question covers a period: only
 the former includes archived artifacts. The newest artifact per organization,
 control and collector always stays hot.
 
+## OSCAL assessment results
+
+Build an auditor's package with `AshCompliance.Ownership.Package.sections/4`
+and `AshCompliance.Oscal.AssessmentResults.build/2`. Check who may export, and
+for which organization, before calling `sections/4`: it reads with
+`authorize?: false` by default. Pass your control file as `controls_file:` and
+anything the compliance plane cannot observe (an audit-log verification,
+review tasks) as `extra_observations:` / `extra_findings:` plain maps. Never
+post-process the document to say `satisfied`: an attestation is the auditor's.
+A host finding's `reason` is `:fail` or `:other`; anything else raises.
+
 ## Evidence producers and the control-file check
 
 `mix ash_compliance.controls.check` passes a producer that merely exists.

@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Luke Galea
+# SPDX-License-Identifier: MIT
+
+version = 1
+
+# NIST's OSCAL schema and its licence, vendored unchanged for the test suite.
+[[annotations]]
+path = ["test/support/oscal/*/oscal_assessment-results_schema.json", "test/support/oscal/*/LICENSE.md"]
+precedence = "override"
+SPDX-FileCopyrightText = "National Institute of Standards and Technology (NIST)"
+SPDX-License-Identifier = "CC0-1.0"

@@ -161,7 +161,10 @@ checkpointing and dead-lettering handled by the projector engine.
   every read of evidence takes the hot table and the archive together.
 * **OSCAL interop** — catalog and profile import/export via
   `AshCompliance.Oscal` and the `mix ash_compliance.import_oscal` /
-  `mix ash_compliance.export_oscal` tasks.
+  `mix ash_compliance.export_oscal` tasks, and assessment results for an
+  auditor (`AshCompliance.Ownership.Package.sections/4`,
+  `AshCompliance.Oscal.AssessmentResults.build/2`), validated in the test
+  suite against NIST's OSCAL 1.2.3 schema. They never say `satisfied`.
 * **Rule set diffs** — `AshCompliance.RuleSet.Diff.diff/2` says what changed
   between two `RuleSetRevision`s, over the bundles they pin rather than the
   JSON text: the layer and combining algorithm, each rule by id and each fact
@@ -289,7 +292,8 @@ PGPORT=5435 mix test          # config/test.exs documents DB_HOST/DB_USER/DB_PAS
   declared schemes, the default precedence, what each layer may and may not do.
 - [The projector](documentation/topics/the-projector.md) — grain, facts,
   translation, replay determinism.
-- [OSCAL](documentation/topics/oscal.md) — catalog/profile import and export.
+- [OSCAL](documentation/topics/oscal.md) — catalog/profile import and export, and
+  assessment results.
 - [Ownership and freshness](documentation/topics/ownership-and-freshness.md) — the
   criteria catalogue, the control-file schema, `mix ash_compliance.controls.check`,
   the evidence writer, the freshness worker, and the evidence archive and retention.
