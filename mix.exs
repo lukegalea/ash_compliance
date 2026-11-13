@@ -141,7 +141,8 @@ defmodule AshCompliance.MixProject do
           AshCompliance.Compiler.ContributionSource,
           AshCompliance.Compiler.DatabaseSource,
           AshCompliance.Layering,
-          AshCompliance.Layering.Default
+          AshCompliance.Layering.Default,
+          AshCompliance.RuleSet.Diff
         ],
         "Data plane": [
           AshCompliance.Projector,

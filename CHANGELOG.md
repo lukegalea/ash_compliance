@@ -18,6 +18,8 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
+- `AshCompliance.RuleSet.Diff`: `diff(old, new)` compares two rule set revisions over the bundles they pin, not the JSON text. It reports the layer and combining algorithm, each rule by id property by property, and each fact by name, as plain maps (`aspect`, `kind`, `subject`, `option`, `from`, `to`). `aspects/0` lists what it compares with English labels. A bundle that does not decode is `{:error, :unreadable_bundle}`, not an empty rule set.
+
 - `Processes.Completion.complete/4` option `:approvals_organization_id`: judge the permitted approval in one organization while filing the evidence in another.
 
 - `EvidenceArtifact.content` and `Evidence.record(..., store_content: true)`: an artifact can keep the bytes its hash pins. Stored bytes must match the hash at create; `Evidence.verify/1` re-checks them. Off by default; existing rows are unchanged. Requires a host migration adding a nullable `content` binary column.
