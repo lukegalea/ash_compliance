@@ -211,7 +211,8 @@ defmodule AshCompliance.Resources do
     """
     CREATE OR REPLACE FUNCTION #{function}() RETURNS trigger AS $fn$
     BEGIN
-      IF TG_OP = 'DELETE' AND OLD.collected_at < now() - interval '#{floor} days' THEN
+      IF TG_OP = 'DELETE'
+         AND greatest(OLD.collected_at, OLD.inserted_at) < now() - interval '#{floor} days' THEN
         RETURN OLD;
       END IF;
 
