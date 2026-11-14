@@ -113,7 +113,7 @@ defmodule AshCompliance.Resources do
           end
 
           statement unquote(:"#{table}_guard_trigger") do
-            up(unquote(guard_trigger_sql(table, guard_function)))
+            up(unquote(guard_trigger_sql(table, guard_function, floor)))
             down(unquote("DROP TRIGGER IF EXISTS #{table}_guard ON #{table};"))
           end
         end
@@ -224,11 +224,20 @@ defmodule AshCompliance.Resources do
     """
   end
 
-  defp guard_trigger_sql(table, function) do
+  # The trigger statement carries a digest of the function it calls. A change to the
+  # function then changes both statements, so `mix ash.codegen` drops the trigger before
+  # the function (removals run in reverse declaration order) and creates the function
+  # before the trigger. Changed alone, the function statement's `DROP FUNCTION` would
+  # fail on the trigger that depends on it.
+  defp guard_trigger_sql(table, function, floor) do
     """
+    -- #{function}: #{short_digest(guard_function_sql(table, function, floor))}
     CREATE OR REPLACE TRIGGER #{table}_guard
       BEFORE UPDATE OR DELETE ON #{table}
       FOR EACH ROW EXECUTE FUNCTION #{function}();
     """
   end
+
+  defp short_digest(sql),
+    do: :crypto.hash(:sha256, sql) |> Base.encode16(case: :lower) |> binary_part(0, 16)
 end

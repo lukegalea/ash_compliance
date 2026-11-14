@@ -310,11 +310,12 @@ defmodule AshCompliance.EvidenceArchiveTest do
                :evidence_artifact_archive_guard_trigger
              ]
 
-      # The table and trigger, then the guard as it now reads.
+      # The table and trigger, then the guard and its trigger as they now read.
       migration =
         [
           "20261113120000_evidence_artifact_archive",
-          "20261114120000_evidence_archive_purge_clock"
+          "20261114120000_evidence_archive_purge_clock",
+          "20261114130000_evidence_archive_guard_trigger_digest"
         ]
         |> Enum.map_join(" ", &File.read!("priv/test_repo/migrations/#{&1}.exs"))
         |> squash()
@@ -323,6 +324,20 @@ defmodule AshCompliance.EvidenceArchiveTest do
         assert String.contains?(migration, squash(statement.up)),
                "the test migration does not carry #{statement.name}"
       end
+    end
+
+    # A change to the guard function changes the trigger statement too, so a host's
+    # `mix ash.codegen` drops the trigger before the function and recreates both, instead
+    # of a `DROP FUNCTION` the trigger depends on.
+    test "the trigger statement names the digest of the function it calls" do
+      [function, trigger] = AshPostgres.DataLayer.Info.custom_statements(ArchivedEvidence)
+
+      digest =
+        :crypto.hash(:sha256, function.up) |> Base.encode16(case: :lower) |> binary_part(0, 16)
+
+      assert trigger.up =~ "-- evidence_artifact_archive_guard_fn: #{digest}\n"
+      assert trigger.down =~ "DROP TRIGGER"
+      refute function.down =~ "CASCADE"
     end
 
     test "refuses a missing table and a table name that is not a plain identifier" do

@@ -93,7 +93,7 @@ Requires Elixir 1.20 or later.
 
 ### Changed:
 
-- The evidence archive's 400 days count from when an artifact was recorded: the later of `collected_at`, which the collector supplies, and `inserted_at`, which it cannot. `Retention.purge/1` and the archive's guard trigger both use it, so a back-dated `collected_at` no longer makes an artifact purgeable early. **Host step:** run `mix ash.codegen` to regenerate the archive's guard function.
+- The evidence archive's 400 days count from when an artifact was recorded: the later of `collected_at`, which the collector supplies, and `inserted_at`, which it cannot. `Retention.purge/1` and the archive's guard trigger both use it, so a back-dated `collected_at` no longer makes an artifact purgeable early. The guard trigger's statement names a digest of the function, so `mix ash.codegen` drops the trigger before the function and recreates both, instead of a `DROP FUNCTION` the trigger depends on. **Host step:** run `mix ash.codegen` to regenerate both.
 
 - `ApprovalAttempt :record` no longer accepts `outcome`, `reason` or `decision_hash`: the row asks the separation-of-duties decision itself, so a caller cannot record a permit the decision would not give. `Processes.Approval.record/4` is now `record/3` (no verdict argument). **Host step:** drop the verdict argument at each `Approval.record` call.
 
