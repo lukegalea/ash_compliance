@@ -44,6 +44,18 @@ defmodule AshCompliance.EvidenceArchiveTest do
     artifact
   end
 
+  # Sets when `artifact` was recorded (`inserted_at`, which no caller can set) to `days`
+  # before `@now`, in the hot table, so it can be archived and purged as an artifact
+  # recorded that long ago.
+  defp recorded!(artifact, days) do
+    TestRepo.query!("UPDATE #{@hot} SET inserted_at = $2 WHERE id = $1", [
+      Ecto.UUID.dump!(artifact.id),
+      days_ago(days)
+    ])
+
+    artifact
+  end
+
   defp hot_ids, do: ids(@hot)
   defp archived_ids, do: ids(@archive)
 
@@ -218,9 +230,30 @@ defmodule AshCompliance.EvidenceArchiveTest do
                Retention.purge(now: @now, purge_after_days: 399)
     end
 
+    test "a back-dated collected_at is not purged before 400 days from insertion",
+         %{org: org} do
+      # Collected, its collector says, 500 days ago; recorded today.
+      backdated = record!(org, "CC6.1", 500)
+      recorded_long_ago = record!(org, "CC6.1", 450) |> recorded!(450)
+      _newest = record!(org, "CC6.1", 1)
+
+      {:ok, {:archived, %{row_count: 2}}} = Retention.archive(now: @now)
+
+      assert {:ok, {:purged, %ArchiveRun{row_count: 1}}} =
+               Retention.purge(now: @now, purge_after_days: 400, archive_run: ArchiveRun)
+
+      assert archived_ids() == MapSet.new([backdated.id])
+      refute MapSet.member?(archived_ids(), recorded_long_ago.id)
+
+      # A second purge finds nothing, and the database refuses the row whoever asks.
+      assert {:ok, :nothing} = Retention.purge(now: @now, purge_after_days: 400)
+      refused("DELETE FROM #{@archive} WHERE id = $1", [Ecto.UUID.dump!(backdated.id)])
+      assert archived_ids() == MapSet.new([backdated.id])
+    end
+
     test "deletes archived artifacts past the purge age, and records the purge", %{org: org} do
-      oldest = record!(org, "CC6.1", 600)
-      kept = record!(org, "CC6.1", 500)
+      oldest = record!(org, "CC6.1", 600) |> recorded!(600)
+      kept = record!(org, "CC6.1", 500) |> recorded!(500)
       _newest = record!(org, "CC6.1", 450)
 
       {:ok, {:archived, %{row_count: 2}}} = Retention.archive(now: @now)
@@ -277,10 +310,14 @@ defmodule AshCompliance.EvidenceArchiveTest do
                :evidence_artifact_archive_guard_trigger
              ]
 
+      # The table and trigger, then the guard as it now reads.
       migration =
-        squash(
-          File.read!("priv/test_repo/migrations/20261113120000_evidence_artifact_archive.exs")
-        )
+        [
+          "20261113120000_evidence_artifact_archive",
+          "20261114120000_evidence_archive_purge_clock"
+        ]
+        |> Enum.map_join(" ", &File.read!("priv/test_repo/migrations/#{&1}.exs"))
+        |> squash()
 
       for statement <- statements do
         assert String.contains?(migration, squash(statement.up)),

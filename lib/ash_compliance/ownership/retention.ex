@@ -41,6 +41,14 @@ defmodule AshCompliance.Ownership.Retention do
   `:purge_after_days` is given, and refuses a value under 400. The archive's guard
   trigger refuses to delete a younger row whatever the caller passes.
 
+  **The purge clock starts when the artifact was recorded.** `collected_at` is what the
+  collector says, and a collector may name a time in the past; `inserted_at` is set
+  when the artifact is recorded, and no caller can set it. Both the purge and the guard trigger count
+  the 400 days from the later of the two, so back-dating `collected_at` cannot shorten
+  how long an artifact is kept. The hot window still counts from `collected_at`: an
+  archived artifact is still read with the hot ones, so a back-dated artifact moving to
+  the archive early loses nothing.
+
   **Reading.** Moving an artifact never changes what a read of evidence returns:
   `AshCompliance.Ownership.Evidence.for_control/3`, and through it the freshness sweep,
   reads the hot table and the archive together.
@@ -82,6 +90,11 @@ defmodule AshCompliance.Ownership.Retention do
   @purge_floor_days 400
   @default_batch 10_000
   @store :evidence_artifacts
+
+  # When an archived artifact's 400 days start: the later of the time its collector
+  # names and the time the database recorded it. The guard trigger
+  # (`AshCompliance.Resources`) uses the same expression.
+  @purge_clock "greatest(collected_at, inserted_at)"
 
   @typedoc "What one call did."
   @type step :: :nothing | {:archived, term()} | {:purged, term()} | {:failed, term()}
@@ -129,7 +142,8 @@ defmodule AshCompliance.Ownership.Retention do
   end
 
   @doc """
-  Deletes one batch of archived artifacts collected more than `:purge_after_days` ago.
+  Deletes one batch of archived artifacts recorded more than `:purge_after_days` ago:
+  the later of `collected_at` and `inserted_at` is older than that.
 
   Returns `{:ok, :disabled}` when no age is given, `{:ok, step}`,
   `{:error, {:below_floor, :purge_after_days, floor}}` or
@@ -309,7 +323,7 @@ defmodule AshCompliance.Ownership.Retention do
             """
             SELECT #{digest_of("a")} FROM (
               SELECT id, hash FROM #{spec.archive_table}
-              WHERE collected_at < $1 ORDER BY collected_at, id LIMIT $2) a
+              WHERE #{@purge_clock} < $1 ORDER BY #{@purge_clock}, id LIMIT $2) a
             """,
             [cutoff, batch]
           )
@@ -319,7 +333,7 @@ defmodule AshCompliance.Ownership.Retention do
             """
             DELETE FROM #{spec.archive_table}
             WHERE id IN (SELECT id FROM #{spec.archive_table}
-                         WHERE collected_at < $1 ORDER BY collected_at, id LIMIT $2)
+                         WHERE #{@purge_clock} < $1 ORDER BY #{@purge_clock}, id LIMIT $2)
             """,
             [cutoff, batch]
           )
