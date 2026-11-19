@@ -41,7 +41,9 @@ For each event on a `project_all` action, `AshCompliance.Projector.translate/3`:
 
 1. resolves the bundle through the `:bundle` MFA (the event is appended to
    the args — read the tenant id from its metadata and load the active
-   `PolicyBundle`);
+   `PolicyBundle`), and normalises it to the stored spelling, so a bundle the
+   MFA returns straight from the DSL (`MyRules.__bundle__()`, atom subjects)
+   matches the string subjects of event facts just as a decoded one does;
 2. extracts facts with `AshCompliance.Projector.Facts` — by default from
    `event.metadata["facts"]`, as `[subject, "predicate", value]` triples;
    predicate names are matched against the bundle's fact schema by string, so

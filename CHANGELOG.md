@@ -18,6 +18,16 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
+- `AshCompliance.Status.questions/2` (delegated as `AshCompliance.status_questions/2`):
+  the absences a person must answer before the `:unknown` rules of a status can decide.
+  One string-keyed entry per (rule, subject, predicate) for each absence in
+  `missing_facts` that the schema declares `missing: :unknown` and an unknown rule
+  probes, carrying the rule id, message, evidence and the fact's schema description as
+  the question. It takes the bundle the status was evaluated against, in any form
+  `status_for/2` accepts, and refuses one with another hash. An empty list is not
+  compliance: an `:unknown` status still blocks. **Adopting:** a host that filtered
+  `missing_facts` itself to build an interview can call `questions/2` instead.
+
 - OSCAL assessment results. `AshCompliance.Ownership.Package.sections(org, from, to, opts)`
   assembles the compliance plane's part of an audit package: the criteria in scope
   (`categories:`) with the host's control-file row for each (`controls_file:`), the
@@ -92,6 +102,22 @@ Requires Elixir 1.20 or later.
   the latest decision by instant, not by struct term order.
 
 ### Changed:
+
+- **Contract change: a passed `AshRules.Ir.Bundle` is normalised to its stored
+  spelling.** `AshCompliance.status_for/2` (`:bundle`) and
+  `AshCompliance.Projector.translate/4` put an IR bundle through the IR codec
+  (encode, then decode with the verifiers) before evaluating it. A bundle
+  compiled from the DSL keeps atom subjects (`has(:application, ...)`), while the
+  `AshCompliance.FactBuilder` contract emits string subjects, so until now
+  every rule of such a bundle read as `:not_applicable` and nothing was asked.
+  It now evaluates exactly as the same bundle read back from storage. The
+  bundle hash and revision are unchanged; a decoded bundle comes back equal; a
+  stored `PolicyBundle` is unaffected. A bundle that cannot be normalised is
+  `{:error, {:invalid_bundle, reason}}` from `status_for/2`, and error ops from
+  the projector. A caller that passed a DSL bundle together with atom-subject
+  facts must emit string subjects, as the fact-builder contract already says.
+  **Adopting:** a host that round-trips a bundle through `AshRules.Ir.encode!/1`
+  and `decode!/1` before passing it can delete that step.
 
 - The evidence archive's 400 days count from when an artifact was recorded: the later of `collected_at`, which the collector supplies, and `inserted_at`, which it cannot. `Retention.purge/1` and the archive's guard trigger both use it, so a back-dated `collected_at` no longer makes an artifact purgeable early. The guard trigger's statement names a digest of the function, so `mix ash.codegen` drops the trigger before the function and recreates both, instead of a `DROP FUNCTION` the trigger depends on. **Host step:** run `mix ash.codegen` to regenerate both.
 

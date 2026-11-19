@@ -272,8 +272,24 @@ defmodule AshCompliance.Projector do
   @doc """
   Like `translate/3`, but with the bundle supplied — for hosts that resolve
   the bundle themselves (and for tests).
+
+  The bundle is normalised to its stored spelling first, exactly as
+  `AshCompliance.Status.for/2` does with a passed bundle: one compiled from
+  the DSL and the same bundle decoded from storage translate identically, and
+  the recorded bundle hash is the same. A bundle that cannot be normalised
+  becomes error ops, like any other bundle resolution failure.
   """
   def translate(event, current_row, %AshRules.Ir.Bundle{} = bundle, opts) do
+    case AshCompliance.BundleForm.normalize(bundle) do
+      {:ok, bundle} ->
+        extract_and_translate(event, current_row, bundle, opts)
+
+      {:error, reason} ->
+        {:ok, error_ops(event, current_row, "bundle resolution failed: #{inspect(reason)}")}
+    end
+  end
+
+  defp extract_and_translate(event, current_row, bundle, opts) do
     case AshCompliance.Projector.Facts.extract(opts, event, bundle) do
       {:ok, facts} ->
         evaluate_and_translate(event, current_row, bundle, facts)
