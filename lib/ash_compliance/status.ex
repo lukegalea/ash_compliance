@@ -35,12 +35,35 @@ defmodule AshCompliance.Status do
   collapse to compliant) — and each carries the rule id, severity and gap text
   the guard quotes on refusals. `AshCompliance.Status.message/1` renders that
   refusal vocabulary directly for hosts that want one string.
+
+  ## Passing a bundle
+
+  A bundle compiled from the `AshRules` DSL keeps the terms it was written
+  with: `has(:appointment, ...)` holds the atom `:appointment`. Stored bundles
+  have been through JSON, where subject terms are opaque, so they hold the
+  string `"appointment"`, and the `AshCompliance.FactBuilder` contract has
+  hosts emit that string. `for/2` therefore puts a passed
+  `AshRules.Ir.Bundle` through the IR codec (`AshRules.Ir.encode/1`, then
+  `AshRules.Ir.decode/1`) before evaluating it. The content hash is computed
+  over the canonical JSON, so `bundle_hash` and `bundle_revision` are the
+  same either way, and a bundle that is already decoded comes back equal. A
+  host does not need to round-trip a bundle itself before passing it.
+
+  ## Asking for what is missing
+
+  A rule is `:unknown` when a fact its schema declares `missing: :unknown`
+  is absent. `questions/2` turns a status into the list of those absences a
+  person must answer, one entry per (rule, subject, predicate), each with the
+  fact's schema description as the question. An empty list does not make an
+  `:unknown` status compliant: decide on `status`, and use the questions only
+  to say what would let it decide.
   """
 
   defstruct [:status, :rules, :bundle_hash, :bundle_revision, :missing_facts, :facts]
 
-  alias AshCompliance.Resources.PolicyBundle
+  alias AshCompliance.BundleForm
   alias AshCompliance.Status.Verdict
+  alias AshRules.Ir.{Fact, FactSchema, Predicate, Rule}
 
   # Options status_for/1 consumes itself; everything else reaches the fact
   # builder as context (the guard's `transition_to` is the canonical case).
@@ -70,8 +93,12 @@ defmodule AshCompliance.Status do
       implementing the behaviour; see the behaviour for the contract.
     * `:facts` — explicit fact triples, bypassing the builder. For callers
       that already hold working memory.
-    * `:bundle` — a pre-fetched `AshCompliance.Resources.PolicyBundle` or a
-      pre-decoded `AshRules.Ir.Bundle`, bypassing the active-bundle read.
+    * `:bundle` — a pre-fetched `AshCompliance.Resources.PolicyBundle` or an
+      `AshRules.Ir.Bundle`, bypassing the active-bundle read. An IR bundle is
+      normalised to its stored spelling first (see "Passing a bundle" in the
+      module docs), so one compiled from the DSL (`MyRules.__bundle__()`) and
+      the same bundle decoded from storage evaluate identically. A bundle that
+      cannot be normalised is `{:error, {:invalid_bundle, reason}}`.
 
   Returns `{:ok, status}`, or `{:error, :no_active_bundle}` when the
   organization has no active bundle (absence is meaningful: a host may render
@@ -110,6 +137,107 @@ defmodule AshCompliance.Status do
     end
   end
 
+  @typedoc """
+  One absence a person must answer, as `questions/2` returns it. String keys,
+  so a host can store the entry as JSON and read it back unchanged:
+
+    * `"rule"` — the id of the unknown rule that probes the fact
+    * `"message"` — that rule's message, or its name when it declares none
+    * `"evidence"` — the rule's evidence references
+    * `"subject"` — the probed subject, spelled as the facts spell it
+    * `"predicate"` — the fact's name, as a string
+    * `"question"` — the fact's schema description (`nil` when the schema
+      gives none)
+  """
+  @type question() :: %{required(String.t()) => term()}
+
+  @doc """
+  The absences a person must answer before the unknown rules of `status` can
+  decide.
+
+  `status` is a result of `for/2`; `bundle` is the bundle it was evaluated
+  against, in any form `for/2` accepts through `:bundle` (an
+  `AshRules.Ir.Bundle`, compiled or decoded, or a stored
+  `AshCompliance.Resources.PolicyBundle`), normalised the same way. `Status`
+  carries the bundle's hash, not its rules or fact schema, so the bundle is an
+  argument; one whose hash differs from `status.bundle_hash` is refused as
+  `{:error, {:bundle_mismatch, status_hash, bundle_hash}}`, because questions
+  derived from other rules would not unblock this status.
+
+  An entry is returned for each absence in `status.missing_facts` that:
+
+    * is declared `missing: :unknown` in the bundle's fact schema (an absence
+      read as `false` was already decided, so it asks nothing);
+    * is probed by a rule whose verdict is `:unknown`: one of the rule's
+      applicability or failure conditions names that predicate with that
+      subject, or with a variable subject.
+
+  There is one entry per (rule, subject, predicate), in rule order and then
+  in `missing_facts` order. Two unknown rules that probe the same fact give
+  two entries, one per rule. See `t:question/0` for the keys.
+
+  **An empty list is not "satisfied".** `questions/2` reads only the status
+  it is handed, so an `:unknown` rule can have no entry: its absence was
+  trimmed from `missing_facts`, or the status was stored without them.
+  `questions/2` returns `[]` for such a rule, and `status.status` stays
+  `:unknown`: the caller must still treat it as blocking. Decide on
+  `status.status`, never on whether this list is empty.
+  """
+  @spec questions(t(), AshRules.Ir.Bundle.t() | struct()) ::
+          {:ok, [question()]} | {:error, term()}
+  def questions(%__MODULE__{} = status, bundle) do
+    with {:ok, bundle} <- BundleForm.resolve(bundle),
+         :ok <- same_bundle(status, bundle) do
+      {:ok, collect_questions(status, bundle)}
+    end
+  end
+
+  defp same_bundle(%__MODULE__{bundle_hash: hash}, %AshRules.Ir.Bundle{content_hash: hash}),
+    do: :ok
+
+  defp same_bundle(status, bundle),
+    do: {:error, {:bundle_mismatch, status.bundle_hash, bundle.content_hash}}
+
+  defp collect_questions(status, bundle) do
+    rules = Map.new(bundle.rules, &{&1.id, &1})
+    askable = Enum.flat_map(status.missing_facts, &askable(&1, bundle.fact_schema))
+
+    for %Verdict{status: :unknown, rule_id: rule_id} <- status.rules,
+        %Rule{} = rule <- [rules[rule_id]],
+        {subject, fact} <- askable,
+        probes?(rule, subject, fact.name),
+        uniq: true do
+      question(rule, subject, fact)
+    end
+  end
+
+  defp askable({subject, name, _value}, schema) do
+    case FactSchema.fetch(schema, name) do
+      {:ok, %Fact{missing: :unknown} = fact} -> [{subject, fact}]
+      _other -> []
+    end
+  end
+
+  defp probes?(rule, subject, name) do
+    rule
+    |> Rule.predicates()
+    |> Enum.any?(fn %Predicate{} = predicate ->
+      predicate.name == name and
+        (predicate.subject == subject or Predicate.var?(predicate.subject))
+    end)
+  end
+
+  defp question(rule, subject, fact) do
+    %{
+      "rule" => rule.id,
+      "message" => rule.message || rule.name,
+      "evidence" => rule.evidence,
+      "subject" => subject,
+      "predicate" => Atom.to_string(fact.name),
+      "question" => fact.description
+    }
+  end
+
   # --- assembly -----------------------------------------------------------------
 
   defp new(result, facts) do
@@ -130,17 +258,8 @@ defmodule AshCompliance.Status do
   # request attached, so it runs under `authorize?: false` on purpose.
   defp fetch_bundle(opts) do
     case opts[:bundle] do
-      %AshRules.Ir.Bundle{} = bundle ->
-        {:ok, bundle}
-
-      %PolicyBundle{} = bundle ->
-        decode_bundle(bundle)
-
-      nil ->
-        active_bundle(organization(opts))
-
-      other ->
-        {:error, {:invalid_bundle, other}}
+      nil -> active_bundle(organization(opts))
+      bundle -> BundleForm.resolve(bundle)
     end
   end
 
@@ -171,14 +290,12 @@ defmodule AshCompliance.Status do
         {:error, :no_active_bundle}
 
       {:ok, bundle} ->
-        decode_bundle(bundle)
+        BundleForm.resolve(bundle)
 
       {:error, reason} ->
         {:error, {:bundle_read_failed, reason}}
     end
   end
-
-  defp decode_bundle(bundle), do: AshRules.Ir.decode(bundle.rules_json)
 
   # --- the facts --------------------------------------------------------------------
 

@@ -171,6 +171,33 @@ defmodule AshCompliance.StatusTest do
     assert status.status == :compliant
   end
 
+  test "a PolicyBundle, its decoded form and that form normalised evaluate identically" do
+    policy_bundle = AshCompliance.Domain.active_policy_bundle!(@org, authorize?: false)
+    {:ok, decoded} = AshRules.Ir.decode(policy_bundle.rules_json)
+    {:ok, normalised} = AshCompliance.BundleForm.normalize(decoded)
+
+    # A stored bundle is already in the stored spelling: normalising it again
+    # changes nothing, the hash included.
+    assert normalised == decoded
+    assert normalised.content_hash == policy_bundle.content_hash
+
+    statuses =
+      for bundle <- [policy_bundle, decoded, normalised] do
+        {:ok, status} =
+          AshCompliance.status_for(%Appointment{id: Ecto.UUID.generate()},
+            bundle: bundle,
+            fact_builder: AppointmentFacts,
+            transition_to: :checked_in
+          )
+
+        status
+      end
+
+    assert [status, status, status] = statuses
+    assert status.status == :noncompliant
+    assert status.bundle_hash == policy_bundle.content_hash
+  end
+
   test "a capture can be the fact builder" do
     facts = fn _record ->
       [

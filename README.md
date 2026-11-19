@@ -175,6 +175,8 @@ checkpointing and dead-lettering handled by the projector engine.
   active bundle against one record, read-only, and returns per-rule verdicts
   (`AshCompliance.Status`, `AshCompliance.Status.Verdict`). The host supplies
   facts through the `AshCompliance.FactBuilder` behaviour.
+  `AshCompliance.status_questions/2` lists the absences a person must answer
+  before an `:unknown` rule can decide.
 
 There is deliberately **no API layer**: resources, actions, the compiler and
 the projector only. Wire exposure is the host's concern. Every public action

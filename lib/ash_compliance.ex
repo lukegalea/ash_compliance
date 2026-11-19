@@ -79,4 +79,19 @@ defmodule AshCompliance do
   def status_for(record, opts \\ []) do
     AshCompliance.Status.for(record, opts)
   end
+
+  @doc """
+  The absences a person must answer before the unknown rules of a status can
+  decide: one entry per (rule, subject, predicate), for facts declared
+  `missing: :unknown` that an `:unknown` rule probes.
+
+  An empty list is not compliance; an `:unknown` status still blocks. See
+  `AshCompliance.Status.questions/2` for the entry shape and the bundle forms
+  accepted.
+  """
+  @spec status_questions(AshCompliance.Status.t(), AshRules.Ir.Bundle.t() | struct()) ::
+          {:ok, [AshCompliance.Status.question()]} | {:error, term()}
+  def status_questions(status, bundle) do
+    AshCompliance.Status.questions(status, bundle)
+  end
 end

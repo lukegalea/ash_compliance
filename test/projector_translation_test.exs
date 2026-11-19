@@ -54,6 +54,28 @@ defmodule AshCompliance.ProjectorTranslationTest do
     }
   end
 
+  test "a DSL bundle translates exactly as its decoded form" do
+    # The DSL bundle keeps atom subjects (`has(:customer, ...)`); event facts
+    # carry strings. The bundle is normalised first, so the two meet.
+    metadata = %{
+      "facts" => [
+        ["customer", "status", "active"],
+        ["customer", "jurisdiction", "regulated"],
+        ["customer", "has_valid_kyc", false],
+        ["customer", "reviewed", true]
+      ]
+    }
+
+    dsl = GlobalBaseline.__bundle__()
+
+    {:ok, direct} = Projector.translate(event(metadata), finding_row(:unknown), dsl, [])
+    {:ok, stored} = Projector.translate(event(metadata), finding_row(:unknown), @bundle, [])
+
+    assert direct == stored
+    assert {:set, :status, :noncompliant} in direct
+    assert {:set, :bundle_hash, dsl.content_hash} in direct
+  end
+
   test "a fully-known compliant subject yields compliant ops with no breach" do
     metadata = %{
       "facts" => [
