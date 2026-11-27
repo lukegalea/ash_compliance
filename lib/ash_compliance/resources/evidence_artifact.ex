@@ -13,6 +13,13 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
   supports (`examine`, `interview`, or `test`), the chain of custody as an
   append-only list of custody entries, and the retention class.
 
+  `environment_class` is the class of the environment the evidence was collected in, in
+  the terms `AshCompliance.Boundary` declares environments with (`:production` or
+  `:non_production`, `AshCompliance.Boundary.Environment.classes/0`). The freshness sweep
+  never counts an artifact collected in a non-production environment: it proves the code
+  ran, not that the control operates. `nil` says nothing about the environment, and is
+  counted as before.
+
   Create and read only: evidence is never edited. A corrected artifact is a
   new artifact with a new hash and a new custody entry.
   """
@@ -55,6 +62,14 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
     )
 
     attribute(:retention_class, :string, public?: true)
+
+    attribute(:environment_class, :atom,
+      constraints: [one_of: AshCompliance.Boundary.Environment.classes()],
+      public?: true,
+      description:
+        "The class of the environment the evidence was collected in. A :non_production artifact is never counted as evidence."
+    )
+
     attribute(:collected_at, :utc_datetime_usec, allow_nil?: false, public?: true)
 
     create_timestamp(:inserted_at)
@@ -78,6 +93,7 @@ defmodule AshCompliance.Resources.EvidenceArtifact do
         :method,
         :chain_of_custody,
         :retention_class,
+        :environment_class,
         :collected_at
       ])
 

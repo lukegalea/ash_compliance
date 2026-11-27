@@ -188,6 +188,36 @@ defmodule AshCompliance.OwnershipSweepTest do
       assert freshness_finding(org, "CC6.1").resolved_at == nil
     end
 
+    test "an artifact collected in a non-production environment is recorded, not counted",
+         %{org: org} do
+      artifact = record!(org, "CC6.1", environment_class: :non_production)
+
+      assert {:ok, %{environment_class: :non_production}} =
+               Domain.get_evidence_artifact_by_id(artifact.id, authorize?: false)
+
+      {:ok, results} = sweep(org, controls_file())
+
+      assert %{state: :unknown, reason: :non_production} =
+               Enum.find(results, &(&1.criterion == "CC6.1"))
+
+      assert freshness_finding(org, "CC6.1").resolved_at == nil
+
+      record!(org, "CC6.1", environment_class: :production)
+      {:ok, results} = sweep(org, controls_file())
+      assert %{state: :evidenced} = Enum.find(results, &(&1.criterion == "CC6.1"))
+    end
+
+    test "an environment class that is not a Boundary class is refused", %{org: org} do
+      assert {:error, _invalid} =
+               Evidence.record(org, "CC6.1", "x",
+                 producer: @producer,
+                 now: @now,
+                 environment_class: :staging
+               )
+
+      assert Domain.evidence_for_control!(org, "CC6.1", authorize?: false) == []
+    end
+
     test "bytes altered in the database after recording are not evidence", %{org: org} do
       record!(org, "CC6.1")
       {:ok, results} = sweep(org, controls_file())

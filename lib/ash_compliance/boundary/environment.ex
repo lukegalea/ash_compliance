@@ -15,4 +15,16 @@ defmodule AshCompliance.Boundary.Environment do
   ]
 
   @type t :: %__MODULE__{}
+
+  @classes [:production, :non_production]
+
+  @typedoc "The class of an environment."
+  @type class :: :production | :non_production
+
+  @doc """
+  The classes an environment may be: `:production`, or `:non_production` under a data
+  ceiling.
+  """
+  @spec classes() :: [class()]
+  def classes, do: @classes
 end

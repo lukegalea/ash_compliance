@@ -39,8 +39,11 @@ defmodule AshCompliance.Ownership.Evidence do
   collector). Optional: `:media_type` (default `"application/octet-stream"`),
   `:method` (`:examine`, `:interview` or `:test`; default `:examine`),
   `:collected_at` (default now), `:now`, `:subject_type`, `:subject_id`,
-  `:retention_class`, `:location`, `:actor`, `:authorize?`, `:store_content`
-  (default `true`; keep the bytes on the row, without which the artifact is not evidence).
+  `:retention_class`, `:environment_class` (`:production` or `:non_production`, the
+  class of the environment the content was collected in; a `:non_production` artifact is
+  recorded but never counted as evidence), `:location`, `:actor`, `:authorize?`,
+  `:store_content` (default `true`; keep the bytes on the row, without which the artifact
+  is not evidence).
 
   Returns `{:error, reason}` for empty content, a blank producer, an invalid
   organization id, or a collection time later than now plus a small skew.
@@ -68,6 +71,7 @@ defmodule AshCompliance.Ownership.Evidence do
         collector: producer,
         method: Keyword.get(opts, :method, :examine),
         retention_class: opts[:retention_class],
+        environment_class: opts[:environment_class],
         collected_at: collected_at,
         chain_of_custody: [
           %{

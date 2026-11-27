@@ -115,6 +115,28 @@ defmodule AshCompliance.OwnershipFreshnessTest do
     assert %{state: :evidenced} = eval(%{}, [bad, good])
   end
 
+  test "an artifact collected in a non-production environment is not evidence" do
+    for class <- [:non_production, "non_production"] do
+      non_production = artifact(@producer, hours_ago(1), %{environment_class: class})
+      assert_unknown(eval(%{}, [non_production]), :non_production)
+    end
+
+    for class <- [:production, "production", nil] do
+      assert %{state: :evidenced} =
+               eval(%{}, [artifact(@producer, hours_ago(1), %{environment_class: class})])
+    end
+  end
+
+  test "a non-production artifact neither rescues nor masks a production one" do
+    production = artifact(@producer, hours_ago(3), %{environment_class: :production})
+    newer = artifact(@producer, hours_ago(1), %{environment_class: :non_production})
+    assert %{state: :evidenced, latest_at: latest} = eval(%{}, [newer, production])
+    assert latest == hours_ago(3)
+
+    stale = artifact(@producer, hours_ago(24 * 200), %{environment_class: :production})
+    assert_unknown(eval(%{}, [newer, stale]), :stale)
+  end
+
   test "an artifact from a producer the row does not declare is unknown" do
     assert_unknown(eval(%{}, [artifact("module:Other", hours_ago(1))]), :no_evidence)
   end

@@ -175,6 +175,7 @@ defmodule AshCompliance.Ownership.Package do
       subject_type: row.subject_type,
       subject_id: row.subject_id,
       retention_class: row.retention_class,
+      environment_class: row.environment_class && to_string(row.environment_class),
       chain_of_custody: row.chain_of_custody || [],
       location: to_string(Evidence.location(row))
     }
@@ -232,6 +233,7 @@ defmodule AshCompliance.Ownership.Package do
       "subject_type" => artifact.subject_type,
       "subject_id" => artifact.subject_id,
       "retention_class" => artifact.retention_class,
+      "environment_class" => artifact.environment_class,
       "chain_of_custody" => artifact.chain_of_custody,
       "content" => content,
       "content_omitted" => omitted
