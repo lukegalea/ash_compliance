@@ -18,6 +18,14 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
+- Reference schemes a host configures for the control file
+  (`AshCompliance.Ownership.ReferenceScheme`,
+  `config :ash_compliance, reference_schemes: %{"journey" => MyApp.JourneyReference}`):
+  a row may name `scheme:value`, and `Ownership.Resolver` (so `Ownership.Check` and
+  `mix ash_compliance.controls.check`) asks the scheme's module whether the reference
+  resolves and whether a producer records evidence for a criterion. The built-in
+  `module:`, `mix:` and `file:` schemes cannot be replaced. **Adopting:** nothing changes
+  until a host configures a scheme.
 - `environment_class` on evidence: the class of the environment an artifact was
   collected in, in `AshCompliance.Boundary`'s terms (`:production` or `:non_production`,
   `AshCompliance.Boundary.Environment.classes/0`). `Evidence.record/4` takes it as the

@@ -32,7 +32,9 @@ defmodule AshCompliance.Ownership.Check do
 
     * `:categories` - categories in the audit (default `[:security]`)
     * `:root` - directory `file:` references resolve against (default cwd)
-    * `:resolver` - `(ref, root -> :ok | {:error, String.t()})`
+    * `:resolver` - `(ref, root -> :ok | {:error, String.t()})`; the default,
+      `AshCompliance.Ownership.Resolver.resolve/2`, includes the schemes the host
+      configures (`AshCompliance.Ownership.ReferenceScheme`)
     * `:require_producer_proof` - when `true`, a producer that merely exists is
       not enough: it must declare the criterion it records evidence for
       (see `AshCompliance.Ownership.Resolver.proves_producer/2`). Default

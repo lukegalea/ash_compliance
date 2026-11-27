@@ -26,8 +26,10 @@ defmodule Mix.Tasks.AshCompliance.Controls.Check do
     * `--root` - directory `file:` references resolve against (default cwd)
     * `--require-producer-proof` - a producer that merely exists is not enough:
       its module must export `evidence_controls/0` listing the criterion it
-      records evidence for. Without it, an unwired producer passes this check
-      (the sweep still reads the row `:unknown`). Off by default so a host can
+      records evidence for, and a reference in a scheme the host configures
+      (`AshCompliance.Ownership.ReferenceScheme`) is answered by that scheme.
+      Without it, an unwired producer passes this check (the sweep still reads
+      the row `:unknown`). Off by default so a host can
       adopt the check first; turn it on once its producers declare their
       criteria, and keep it on in CI.
     * `--report` - list every problem and exit 0, so a host can adopt the
