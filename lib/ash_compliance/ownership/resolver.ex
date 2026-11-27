@@ -11,6 +11,8 @@ defmodule AshCompliance.Ownership.Resolver do
       found on the code path
     * `mix:task.name` - a Mix task, for example `mix:ash_compliance.controls.check`
     * `file:relative/path` - a file under the host root
+    * `scheme:value` for a scheme the host configures
+      (`AshCompliance.Ownership.ReferenceScheme`), which answers for it
 
   Anything else, or a reference that does not exist, is unresolvable. Module
   and task lookups search the code path for the beam file and never create
@@ -18,6 +20,16 @@ defmodule AshCompliance.Ownership.Resolver do
   """
 
   @type result :: :ok | {:error, String.t()}
+
+  @builtin ~w(module mix file)
+
+  @doc """
+  The reference schemes the host configures, by name:
+  `config :ash_compliance, reference_schemes: %{"journey" => MyApp.JourneyReference}`.
+  """
+  @spec schemes() :: %{String.t() => module()}
+  def schemes,
+    do: Map.drop(Application.get_env(:ash_compliance, :reference_schemes, %{}), @builtin)
 
   @doc "Resolves `ref` relative to `root`."
   @spec resolve(term(), Path.t()) :: result()
@@ -43,8 +55,12 @@ defmodule AshCompliance.Ownership.Resolver do
       else: {:error, "file #{path} does not exist"}
   end
 
-  def resolve(ref, _root) when is_binary(ref) and ref != "",
-    do: {:error, "#{inspect(ref)} is not a module:, mix: or file: reference"}
+  def resolve(ref, root) when is_binary(ref) and ref != "" do
+    case configured(ref) do
+      {scheme, value} -> scheme.resolve(value, root)
+      nil -> {:error, "#{inspect(ref)} is not #{known()} reference"}
+    end
+  end
 
   def resolve(_ref, _root), do: {:error, "reference is missing or not a string"}
 
@@ -54,7 +70,8 @@ defmodule AshCompliance.Ownership.Resolver do
   A producer module (or Mix task module) proves it by exporting
   `evidence_controls/0`, the list of criterion ids it records artifacts for.
   Existing on the code path proves nothing, and a `file:` reference cannot
-  declare anything, so it is never proven.
+  declare anything, so it is never proven. A configured scheme answers for its
+  own references (`c:AshCompliance.Ownership.ReferenceScheme.proves_producer/2`).
   """
   @spec proves_producer(term(), String.t()) :: result()
   def proves_producer("module:" <> name, criterion) when name != "",
@@ -65,8 +82,12 @@ defmodule AshCompliance.Ownership.Resolver do
     declares(["Elixir", "Mix", "Tasks" | parts], "mix task " <> task, criterion)
   end
 
-  def proves_producer(ref, _criterion) when is_binary(ref),
-    do: {:error, "#{inspect(ref)} cannot declare that it records evidence"}
+  def proves_producer(ref, criterion) when is_binary(ref) do
+    case configured(ref) do
+      {scheme, value} -> scheme.proves_producer(value, criterion)
+      nil -> {:error, "#{inspect(ref)} cannot declare that it records evidence"}
+    end
+  end
 
   def proves_producer(_ref, _criterion), do: {:error, "reference is missing or not a string"}
 
@@ -83,6 +104,21 @@ defmodule AshCompliance.Ownership.Resolver do
     end
   rescue
     ArgumentError -> {:error, "#{label} is not on the code path"}
+  end
+
+  defp configured(ref) do
+    with [name, value] when value != "" <- String.split(ref, ":", parts: 2),
+         {:ok, scheme} <- Map.fetch(schemes(), name) do
+      {scheme, value}
+    else
+      _ -> nil
+    end
+  end
+
+  defp known do
+    names = Enum.map(@builtin ++ Enum.sort(Map.keys(schemes())), &(&1 <> ":"))
+    {init, [last]} = Enum.split(names, -1)
+    "a " <> Enum.join(init, ", ") <> " or " <> last
   end
 
   defp beam_present?(beam, label) do
