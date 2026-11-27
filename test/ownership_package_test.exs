@@ -94,6 +94,26 @@ defmodule AshCompliance.OwnershipPackageTest do
       assert freshness["latest_at"] == DateTime.to_iso8601(archived2.collected_at)
     end
 
+    test "names each artifact's environment class, hot or archived, and counts no non-production one",
+         %{org: org} do
+      archived = record!(org, "CC6.1", 200, environment_class: :non_production)
+      _newer = record!(org, "CC6.1", 100, environment_class: :non_production)
+      record!(org, "CC6.1", 10, environment_class: :non_production)
+
+      {:ok, {:archived, %{row_count: 2}}} = Retention.archive(now: @now)
+
+      sections = sections!(org, days_ago(250), @now)
+      artifacts = criterion(sections, "CC6.1")["artifacts"]
+
+      assert Enum.map(artifacts, & &1["environment_class"]) == List.duplicate("non_production", 3)
+      assert hd(artifacts)["id"] == archived.id
+      assert hd(artifacts)["location"] == "archive"
+
+      freshness = criterion(sections, "CC6.1")["freshness"]
+      assert freshness["state"] == "unknown"
+      assert freshness["reason"] == "non_production"
+    end
+
     test "carries text content inline and anything else by its hash", %{org: org} do
       record!(org, "CC6.1", 1, content: ~s({"ok":true}), media_type: "application/json")
       record!(org, "CC6.1", 1, content: <<0, 1, 2>>, media_type: "application/octet-stream")

@@ -105,7 +105,7 @@ defmodule AshCompliance.Boundary do
     identifier: :name,
     schema: [
       name: [type: :atom, required: true],
-      class: [type: {:one_of, [:production, :non_production]}, required: true],
+      class: [type: {:one_of, Environment.classes()}, required: true],
       data_ceiling: [
         type: {:one_of, [:synthetic, :pseudonymised]},
         doc:

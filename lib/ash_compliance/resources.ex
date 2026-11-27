@@ -16,8 +16,9 @@ defmodule AshCompliance.Resources do
 
   Where `AshCompliance.Resources.EvidenceArtifact` rows go after the hot window. The
   columns are the hot table's own (`columns/0`) plus `archived_at`, so an archived
-  artifact still hashes to its `hash`: `content` is kept. `method` is a string here, so
-  an archived row still loads if the hot attribute's allowed values change.
+  artifact still hashes to its `hash`: `content` is kept. `method` and
+  `environment_class` are strings here, so an archived row still loads if the hot
+  attribute's allowed values change.
 
   There is no create, update or destroy action. Rows arrive only through
   `AshCompliance.Ownership.Retention.archive/1`, which verifies each copy against the
@@ -61,7 +62,7 @@ defmodule AshCompliance.Resources do
 
   @hot_columns ~w(id organization_id control_id subject_type subject_id hash content
                   media_type collector method chain_of_custody retention_class
-                  collected_at inserted_at)a
+                  environment_class collected_at inserted_at)a
 
   @doc """
   The columns an archived artifact copies from the hot table, in order. They are every
@@ -163,6 +164,7 @@ defmodule AshCompliance.Resources do
         attribute(:method, :string, allow_nil?: false, writable?: false, public?: true)
         attribute(:chain_of_custody, {:array, :map}, writable?: false, public?: true)
         attribute(:retention_class, :string, writable?: false, public?: true)
+        attribute(:environment_class, :string, writable?: false, public?: true)
 
         attribute(:collected_at, :utc_datetime_usec,
           allow_nil?: false,

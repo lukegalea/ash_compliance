@@ -154,7 +154,13 @@ defmodule AshCompliance.EvidenceArchiveTest do
     end
 
     test "the copy is the hot row, and the move is recorded in the run ledger", %{org: org} do
-      first = record!(org, "CC6.1", 300, media_type: "application/json", subject_id: "s-1")
+      first =
+        record!(org, "CC6.1", 300,
+          media_type: "application/json",
+          subject_id: "s-1",
+          environment_class: :non_production
+        )
+
       second = record!(org, "CC6.1", 250)
       _newest = record!(org, "CC6.1", 1)
 
@@ -180,11 +186,15 @@ defmodule AshCompliance.EvidenceArchiveTest do
       for original <- [first, second] do
         copy = Ash.get!(ArchivedEvidence, original.id, authorize?: false)
 
-        for column <- AshCompliance.Resources.columns() -- [:method] do
+        for column <- AshCompliance.Resources.columns() -- [:method, :environment_class] do
           assert Map.fetch!(copy, column) == Map.fetch!(original, column), "#{column} differs"
         end
 
         assert copy.method == to_string(original.method)
+
+        assert copy.environment_class ==
+                 (original.environment_class && to_string(original.environment_class))
+
         assert DateTime.compare(copy.archived_at, @now) == :eq
         assert Evidence.verify(copy) == :ok
       end

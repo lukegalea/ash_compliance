@@ -18,6 +18,17 @@ Requires Elixir 1.20 or later.
 
 ### Added:
 
+- `environment_class` on evidence: the class of the environment an artifact was
+  collected in, in `AshCompliance.Boundary`'s terms (`:production` or `:non_production`,
+  `AshCompliance.Boundary.Environment.classes/0`). `Evidence.record/4` takes it as the
+  `:environment_class` option, the evidence archive carries it, and the audit package
+  reports it per artifact. The freshness evaluator never counts a `:non_production`
+  artifact: it proves the code ran, not that the control operates, so a source with only
+  such artifacts is `:unknown` with reason `:non_production`. An artifact that names no
+  class counts as before. **Adopting:** a host adds the column to its hot and archive
+  tables (`mix ash.codegen`); a producer that runs outside production passes
+  `environment_class: :non_production`.
+
 - `AshCompliance.Status.questions/2` (delegated as `AshCompliance.status_questions/2`):
   the absences a person must answer before the `:unknown` rules of a status can decide.
   One string-keyed entry per (rule, subject, predicate) for each absence in

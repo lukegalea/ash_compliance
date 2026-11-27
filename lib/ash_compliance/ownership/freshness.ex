@@ -17,7 +17,9 @@ defmodule AshCompliance.Ownership.Freshness do
   `:unknown` is the default for everything the evaluator cannot positively
   establish: a missing file, a malformed file, a missing row, an unknown class
   or frequency, no owner, no artifact, an artifact that is stale, future-dated
-  or malformed, or one collected by a producer the row does not declare.
+  or malformed, one collected in a non-production environment (its
+  `environment_class` is `:non_production`: it proves the code ran, not that the
+  control operates), or one collected by a producer the row does not declare.
 
   An `:unknown` result may be silenced only by an override (a waiver) that has
   a named approver and an expiry, and only until that expiry. See `silencer/4`.
@@ -220,7 +222,8 @@ defmodule AshCompliance.Ownership.Freshness do
       :malformed_artifact,
       :future_dated,
       :hash_mismatch,
-      :no_content
+      :no_content,
+      :non_production
     ]
 
     Enum.find(order, &(&1 in reasons)) ||
@@ -231,10 +234,17 @@ defmodule AshCompliance.Ownership.Freshness do
     with {:ok, at} <- parse_time(field(artifact, :collected_at)),
          :ok <- check_hash(field(artifact, :hash)),
          :ok <- check_not_future(at, now),
-         :ok <- check_content(artifact) do
+         :ok <- check_content(artifact),
+         :ok <- check_environment(field(artifact, :environment_class)) do
       {:ok, at}
     end
   end
+
+  # An archived artifact keeps its class as a string.
+  defp check_environment(class) when class in [:non_production, "non_production"],
+    do: {:error, :non_production}
+
+  defp check_environment(_production_or_unstated), do: :ok
 
   defp parse_time(%DateTime{} = at), do: {:ok, at}
 

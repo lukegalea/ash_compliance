@@ -303,3 +303,8 @@ it records evidence for. Add the function in the same change that makes the
 producer call the evidence writer, then keep the flag on in CI. A `file:`
 producer is never proven. A freshness waiver silences only with a requester
 different from its approver and a window of at most 90 days.
+
+A producer that can run outside production passes `environment_class:` to
+`Evidence.record/4`, in the Boundary's terms (`:production` or
+`:non_production`). The sweep never counts a `:non_production` artifact, so
+never mark a test or staging run `:production` to make a control fresh.
